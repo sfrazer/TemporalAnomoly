@@ -37,37 +37,49 @@ Travel between periods uses either a matching (city, period) card or a Temporal 
 
 ```
 TemporalAnomaly/
-├── main.lua                  -- Love2D entry point
-├── conf.lua                  -- Love2D config (window, modules)
+├── main.lua                      -- Love2D entry point; phase state machine
+├── conf.lua                      -- Love2D config (window, modules)
 ├── src/
 │   ├── state/
-│   │   ├── gameState.lua     -- canonical run state
-│   │   ├── profile.lua       -- persistent profile data
-│   │   └── modifiers.lua     -- ability/event hook pipeline
+│   │   ├── gameState.lua         -- canonical run state + setup
+│   │   └── modifiers.lua         -- ability/event hook pipeline
 │   ├── rules/
-│   │   ├── actions.lua       -- tryTravel, tryTeleport, etc.
-│   │   ├── phases.lua        -- action/draw/instability phases
-│   │   ├── flux.lua          -- resolveChronologicalFlux
-│   │   ├── explosion.lua     -- resolveTemporalExplosion
-│   │   └── winLose.lua       -- checkWinLose
+│   │   ├── actions.lua           -- tryTravel, tryTeleport, tryClear, tryResolve, etc.
+│   │   ├── phases.lua            -- runDrawPhase, runInstabilityPhase, challenge mod effects
+│   │   ├── flux.lua              -- resolveChronologicalFlux
+│   │   ├── explosion.lua         -- resolveTemporalExplosion, placeCubesAt
+│   │   ├── winLose.lua           -- checkWinLose (all difficulties + Priority City)
+│   │   ├── roles.lua             -- applyRole; Chronologist, Physicist, Coordinator abilities
+│   │   ├── runPrep.lua           -- computeRP, totalCost, prepOpts, applyModifiers
+│   │   └── unlocks.lua           -- evaluateUnlocks, applyUnlocks (5 locked-role conditions)
 │   ├── ui/
-│   │   ├── map.lua           -- 2×2 scrollable map
-│   │   ├── hand.lua          -- card display
-│   │   ├── actions.lua       -- action buttons
-│   │   ├── modals.lua        -- role select, meta shop, pickers
-│   │   └── footer.lua        -- stats with red warnings
+│   │   ├── map.lua               -- 2×2 scrollable/zoomable map; Priority City gold ring
+│   │   ├── hand.lua              -- card hand display
+│   │   ├── actions.lua           -- action button row
+│   │   ├── modals.lua            -- generic picker modal (color / city / card list)
+│   │   ├── footer.lua            -- stats bar with red warnings
+│   │   ├── roleSelect.lua        -- role grid (locked roles read from profile.roleUnlocks)
+│   │   ├── profileSelect.lua     -- 3-slot profile picker with create/delete
+│   │   ├── metaShop.lua          -- Research Lab: Starting Bonuses, Deck Upgrades, Challenge Mods
+│   │   └── difficultySelect.lua  -- 4-option difficulty picker (Introductory → Legendary)
 │   ├── persistence/
-│   │   ├── save.lua          -- binser serialize/deserialize
-│   │   └── autosave.lua      -- after-action triggers
-│   └── debug/
-│       └── console.lua       -- backtick-toggle dev commands
+│   │   ├── save.lua              -- binser serialize/deserialize; newProfile, serializeState
+│   │   └── autosave.lua          -- after-action auto-save; getProfile/getSlot accessors
+│   ├── debug/
+│   │   └── console.lua           -- backtick-toggle dev console; command registration
+│   └── audio/                    -- planned (Phase 10E)
+│       └── sounds.lua
 ├── data/
-│   ├── cities.lua            -- 6 US cities + adjacency
-│   ├── periods.lua           -- 4 time periods + colors
-│   ├── cards.lua             -- player deck, threat deck, events
-│   └── roles.lua             -- role definitions
-├── tests/                    -- Busted specs, mirrors src/
-└── assets/                   -- placeholders, art, audio
+│   ├── cities.lua                -- 6 US cities + adjacency graph
+│   ├── periods.lua               -- 4 time periods mapped to colors
+│   ├── cards.lua                 -- city cards (48), event cards (4), threat deck (24)
+│   ├── roles.lua                 -- 3 starter + 5 locked role definitions with unlockHints
+│   └── shop.lua                  -- starting bonuses, deck cards, challenge mod definitions
+├── tests/                        -- Busted specs (217 passing); mirrors src/ layout
+│   ├── helpers.lua               -- makeState, cityCard, eventCard, fluxCard, threatCard
+│   ├── runPrep.spec.lua          -- computeRP, totalCost, prepOpts, GameState integration
+│   └── unlocks.spec.lua          -- evaluateUnlocks, applyUnlocks conditions
+└── assets/                       -- placeholder shapes; audio directory planned
 ```
 
 ---
@@ -172,8 +184,8 @@ When a (city, period, color) node would receive a 4th cube it suffers a Temporal
 ### Profiles
 - 3 profile slots.
 - No manual "load" action exposed to the player.
-- Each profile stores: RP balance, role unlocks, deck-card unlocks, starting-bonus purchases, highest difficulty cleared, run history summary.
-- Default to last-used profile on launch, with an option to change profile.
+- Each profile stores: `rpBalance` (permanent pool, never decreases), `roleUnlocks` (map of role id → true), `bonusSelections`, `deckSelections`, `challengeModIds`, `selectedDifficulty`, `lastRole`, `activeRun`.
+- Default to last-used profile on launch; auto-resumes an active run if one exists.
 - Profile selection screen allows creating a new profile or deleting an existing one.
 
 ---
@@ -196,7 +208,7 @@ When a (city, period, color) node would receive a 4th cube it suffers a Temporal
 | Engineer | Win at Heroic | Build Temporal Outpost without discarding a card |
 | Researcher | Win at Heroic | Start with +1 card and a free Stabilizer Cache in deck |
 | Failsafe Designer | Win at Legendary | Retrieve 1 event card from player discard (once per run) |
-| Temporal Analyst | Win a run with 0 event cards in the deck | Spend an action to look at top 2 threat deck cards |
+| Temporal Analyst | Win a run with no purchased deck upgrade cards | Spend an action to look at top 2 threat deck cards |
 
 ---
 
@@ -223,7 +235,7 @@ Draw 6 threat cards; cubes are placed only on the named (city, period):
 
 ## Deck Customization (rogue-lite meta-layer)
 
-Players spend Research Points between runs to unlock event cards that can be added to their deck during run preparation.
+RP is a **permanent pool** — it only ever grows (earned after each run). In the Research Lab shop, players *allocate* RP into starting bonuses and deck additions. Removing a selection immediately returns that RP to the available pool. The shop shows Total RP, Allocated, and Remaining. Selections persist between runs; players re-choose each run but nothing is permanently deducted.
 
 ### Player deck additions (buffs)
 
@@ -340,28 +352,32 @@ Hook set (extend as needed):
 - Virtual resolution with letterboxed scaling so the 2×2 map keeps its aspect at any window size.
 
 ### Modals
-- **Role Selection** — setup screen, grid of role cards (locked roles grayed)
-- **Meta Shop** — three sections: Starting Bonuses, Player Deck Cards, Challenge Modifiers
-- **Win / Lose** — title, reason, RP earned, Play Again + Shop buttons
+- **Role Selection** — grid of role cards; locked roles grayed; unlocks read dynamically from profile
+- **Difficulty Selection** — 4 cards (Introductory → Legendary) showing flux count, RESOLVE target, special rules
+- **Research Lab (Meta Shop)** — Starting Bonuses, Deck Upgrades, Challenge Mods; shows Total / Allocated / Remaining RP
 - **Generic picker** — color chooser, city chooser, card list (reused across actions)
+- **Win / Lose** — *(Phase 10A)* — clickable end-of-run screen with Play Again / Return to Shop / Change Role
 
 ### Tooltips
 Hover tooltip on every game term explaining mechanic/state. No scripted tutorial.
 
 ---
 
-## Debug Console
+## Debug Console ✓
 
-Toggle with backtick. Used to exercise the modifier pipeline and end-state conditions during development.
+Toggle with backtick at any time. Renders as a semi-transparent terminal overlay at the bottom of the screen. Up/Down arrows scroll history. Commands are registered from `main.lua` as closures over `gs` so they always see current run state.
 
-Commands:
-- `flux` — force a Chronological Flux
-- `seed <n>` — set initial seeding aggression
-- `addcube <city> <period> <color>` — drop a cube
-- `clearcube <city> <period> <color>` — remove a cube
-- `setinstability <n>` — jump Instability Level index
-- `win` / `lose` — force end-state
-- `dump` — print full state to stdout
+| Command | Effect |
+|---|---|
+| `flux` | Force a Chronological Flux resolution |
+| `seed <n>` | Run the instability phase n times |
+| `addcube <city> <period> <color>` | Place 1 cube (may chain-explode) |
+| `clearcube <city> <period> <color>` | Remove 1 cube |
+| `setinstability <n>` | Jump instability index (1–7) |
+| `win` | Resolve all 4 anomalies → triggers gameover flow |
+| `lose` | Set `gs.lost` → triggers gameover flow |
+| `dump` | Print city, turn, difficulty, resolved/repaired state |
+| `help` | List all commands |
 
 ---
 
@@ -402,72 +418,97 @@ Test after each change by running `busted` from the root of the project.
 
 ## Build Roadmap
 
-### Phase 0 — Project scaffolding
+### Phase 0 — Project scaffolding ✓
 - Lua + Love2D project skeleton; `main.lua` boots a stub scene.
 - Busted set up; `busted` from project root passes a sample test.
-- File layout above created with empty modules.
-- `binser` vendored for save serialization.
+- File layout created with empty modules; `binser` vendored.
 
-### Phase 1 — Static data & domain model
-- 6 US cities with bidirectional adjacency (above).
-- 4 time periods mapped to colors.
-- Card definitions: player city cards (48), base event cards (4), threat deck (24), Chronological Flux cards.
-- Pure data modules; tests verify counts, adjacency symmetry, color/period mapping.
+### Phase 1 — Static data & domain model ✓
+- 6 US cities with bidirectional adjacency; 4 time periods mapped to colors.
+- Card definitions: 48 city cards, 4 event cards, 24 threat cards, Chronological Flux cards.
+- Tests verify counts, adjacency symmetry, color/period mapping.
 
-### Phase 2 — Game-state core (headless, fully testable)
-- `GameState` object: decks, hands, board cubes per (city, period, color), outposts, Instability index, Explosion counter, current role.
-- Setup routine: shuffle decks, draw starting hand (4 default), seed initial threats (3/3/2/2/1/1).
-- `tryAction` dispatcher for: Travel, Teleport, Teleport (alternate), Build Temporal Outpost, Clear Anomalous Incident, RESOLVE Anomaly.
-- Draw phase: draw 2; Chronological Flux → `resolveChronologicalFlux`.
-- Instability phase: draw N threat cards based on Instability Level.
-- `resolveTemporalExplosion` chain across same-period neighbors and across periods when an Outpost is present.
-- Auto-derivation of REPAIRED state when RESOLVED + 0 cubes.
-- `checkWinLose` per difficulty, including Priority City rule.
-- Unit tests for every subroutine: each action, flux resolution, explosion chains (single, multi, cross-period), all loss conditions, all win conditions.
+### Phase 2 — Game-state core ✓
+- `GameState.new(opts)` builds full run state: decks, hand, cube table, outposts, instability index, explosion counter.
+- All six actions implemented as `try*` functions; draw and instability phases; Chronological Flux resolution.
+- `resolveTemporalExplosion` chain with same-period spread and cross-period Outpost spread.
+- Auto-derivation of REPAIRED from RESOLVED + zero cubes; `checkWinLose` for all four difficulties.
 
-### Phase 3 — Modifier pipeline
-- `Modifiers` module with hook set above.
-- Rewire core rules to read through hooks (no behavior change).
-- Tests confirm fold order and veto-AND semantics.
+### Phase 3 — Modifier pipeline ✓
+- `Modifiers` module: fold (numeric), permit (veto-AND), fire (event) semantics.
+- All rule lookups route through hooks; tests confirm order and veto-AND behavior.
 
-### Phase 4 — Minimal UI
-- 2×2 map scene with scroll/zoom/pan.
-- City nodes with per-color cube stacks; Outpost markers visible across all periods once built.
-- Hand of cards along the bottom.
-- Action button row.
-- Footer stats with red warnings.
-- Generic picker modal (color / city / card list).
+### Phase 4 — Minimal UI ✓
+- 2×2 map with scroll/zoom/pan; city nodes with cube stacks and Outpost markers.
+- Action button row; hand display; footer stats with red warnings.
+- Generic picker modal (color / city / card list); modal rendering wired into draw loop.
+- Clear action auto-selects when only one color present; shows picker only for ambiguous multi-color nodes.
 
-### Phase 5 — Roles (starting three)
-- Role-selection modal at run start (grid; locked roles grayed).
-- Chronologist, Physicist, Coordinator abilities wired as `Modifiers` handlers with tests.
-- Hook for future locked roles (data-driven so unlocks plug in).
+### Phase 5 — Roles (starting three) ✓
+- Role select grid; Chronologist, Physicist, Coordinator abilities wired as `Modifiers` handlers.
+- `src/rules/roles.lua`; data-driven so locked roles plug in without code changes.
 
-### Phase 6 — Persistence
-- 3 profile slots; profile selection screen with create/delete.
-- Auto-save after every action and end of each phase (atomic write).
-- Boot defaults to last-used profile; no manual load.
+### Phase 6 — Persistence ✓
+- 3 profile slots; `src/ui/profileSelect.lua` with create/delete.
+- Auto-save after every action and phase end via `src/persistence/autosave.lua`.
+- Boot auto-resumes last active run; `Save.loadIndex` tracks last-used slot.
 
-### Phase 7 — Meta-progression
-- RP accounting per run.
-- Meta Shop modal with Starting Bonuses, Player Deck Cards, Challenge Modifiers.
-- Run-prep flow: pick role, choose unlocked bonuses, choose deck additions (max 2 per buff), opt into challenge modifiers for bonus RP.
+### Phase 7 — Meta-progression ✓
+- `src/rules/runPrep.lua`: `computeRP`, `totalCost`, `prepOpts`, `applyModifiers`.
+- `data/shop.lua`: 5 starting bonuses, 5 deck cards, 4 challenge mods with bonus RP values.
+- `src/ui/metaShop.lua`: Research Lab 3-column shop (Total / Allocated / Remaining RP display).
+- Run flow: profile select → role select → difficulty select → shop → game → gameover.
+- Challenge mod cards (Hotspot, Cascade Event, Volatile Anomaly, Temporal Ban) added to threat deck post-seeding; effects wired in `phases.lua` and `flux.lua`.
+- 28 Busted tests for runPrep module.
 
-### Phase 8 — Locked roles, difficulty, Priority City
-- Unlock conditions evaluated on run completion.
-- Difficulty selector with Chronological Flux count, RESOLVE target, and bonus-win logic.
-- Priority City: randomly chosen at Legendary run start, gold border, instant-loss on explosion.
+### Phase 8 — Locked roles, difficulty, Priority City ✓
+- `src/ui/difficultySelect.lua`: 4-option picker between role select and shop.
+- Chosen difficulty saved to `profile.selectedDifficulty`; flows through `RunPrep.prepOpts` → `GameState.new`.
+- `src/rules/unlocks.lua`: `evaluateUnlocks` checks 5 win conditions; `applyUnlocks` saves to `profile.roleUnlocks`; newly unlocked roles shown on gameover overlay.
+- `src/ui/roleSelect.lua` now reads `profile.roleUnlocks` dynamically.
+- Priority City gold ring on map for Legendary runs; instant-loss on explosion already wired in `explosion.lua`.
+- `gs.hadDeckUpgrades` flag supports Temporal Analyst unlock condition.
+- 14 Busted tests for unlock conditions.
 
-### Phase 9 — Debug console
-- Backtick toggle, command list above.
-- Useful during all earlier phases — bring it forward if needed during Phase 2.
+### Phase 9 — Debug console ✓
+- `src/debug/console.lua`: toggle, history, scroll, cursor blink, command registration.
+- Commands: `flux`, `seed <n>`, `addcube`, `clearcube`, `setinstability`, `win`, `lose`, `dump`, `help`.
+- Backtick toggles; console absorbs all keypresses when open; renders last in the draw stack.
 
-### Phase 10 — Polish & feel
-- Animations for cube placement, explosions, card draws.
-- Sound stubs.
-- Tooltip overlay for every term.
-- Win/Lose modal with reason, RP earned, Play Again + Shop.
-- Accessibility pass (color-blind cues; 4 anomaly colors carry meaning).
+### Phase 10A — Win/Lose modal
+Replace the "press R" overlay with a proper clickable end-of-run screen.
+- Styled VICTORY / DEFEAT card: reason text, +RP earned, newly unlocked role names.
+- Three buttons: **Play Again** (same role + difficulty, skip shop), **Return to Shop** (same role, back to shop), **Change Role** (back to role select).
+- Implementation touchpoints: `main.lua` gameover draw block → `src/ui/gameOver.lua`; wire button hits in `love.mousepressed`.
+
+### Phase 10B — Tooltips
+Hover explanation for every interactive element; no scripted tutorial needed.
+- `src/ui/tooltip.lua` — floating tooltip rendered near cursor; caller passes `{text, x, y, w, h}` hit areas each frame.
+- Action buttons: what the action does and its card/resource cost.
+- Hand cards: full card text on hover.
+- Footer stats: explain cube-supply warning threshold, explosion limit, instability schedule.
+- Map city nodes: show current cube counts as text on hover.
+- Implementation touchpoints: `main.lua` tracks `love.mousemoved` hover position; tooltip module is the last thing rendered each frame.
+
+### Phase 10C — Accessibility
+Make the four anomaly colors distinguishable without relying solely on hue.
+- Cube stacks use both color and a distinct shape/symbol per anomaly (●▲■◆ or letter labels B/Y/K/R).
+- Period quadrant labels and borders use both color and a text tag.
+- Shape+color pairing is consistent across map, hand cards, and footer.
+- Implementation touchpoints: `src/ui/map.lua` cube drawing; `src/ui/hand.lua`; `src/ui/footer.lua`.
+
+### Phase 10D — Animations & phase feedback
+Visual feedback so game events read clearly.
+- Brief scale-up flash when a cube is placed; distinct shake/ring when a Temporal Explosion fires.
+- Phase transition banner ("Draw Phase", "Instability Phase") fades in and out for ~0.8s.
+- Chronological Flux: brief screen-edge pulse before resolution begins.
+- `src/ui/anim.lua` — lightweight tweening queue; `update(dt)` called each frame; `render()` drawn on top of everything except the debug console.
+- Implementation touchpoints: `Explosion.placeCubesAt` fires `Anim.cubePlaced`; `Phases.runDrawPhase` fires `Anim.fluxPulse`; `main.lua` draws anim layer.
+
+### Phase 10E — Sound stubs
+Named audio hook points, all silent, ready for real assets.
+- `src/audio/sounds.lua` — one function per event (`Sounds.cubePlaced`, `Sounds.explosion`, `Sounds.flux`, `Sounds.win`, `Sounds.lose`, `Sounds.buttonClick`); each is a no-op until an asset is loaded.
+- Called at the same sites as animation hooks; real `.ogg` files can be dropped into `assets/audio/` and loaded by name without touching call sites.
 
 ### Phase 11 — Event card effects
 Clicking a selected event card triggers its effect immediately (no action cost). The card is discarded afterward. Cannot be played during Chronological Flux resolution.
