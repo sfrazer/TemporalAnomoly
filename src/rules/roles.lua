@@ -20,14 +20,17 @@ APPLY.chronologist = function()
     Mod.register("cubesRemovedPerClear", function(state, value, ctx)
         return 99
     end)
-    -- Auto-clear REPAIRED anomaly cubes whenever the player arrives at a node
+    -- Auto-clear RESOLVED anomaly cubes whenever the player arrives at a node.
+    -- Checks resolved (not repaired) because repaired requires 0 cubes — the
+    -- auto-clear is exactly what moves an anomaly from RESOLVED toward REPAIRED.
     Mod.register("onArrive", function(state, ctx)
         local node = state.cubes[state.currentCity][state.currentPeriod]
         for _, color in ipairs(util.COLORS) do
-            if state.repaired[color] and (node[color] or 0) > 0 then
+            if state.resolved[color] and (node[color] or 0) > 0 then
                 node[color] = 0
             end
         end
+        util.updateRepaired(state)
     end)
 end
 
