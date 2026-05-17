@@ -420,6 +420,125 @@ Test after each change by running `busted` from the root of the project.
 
 ## Build Roadmap
 
+### Active / Next
+
+*No phase in progress.* Phases below are queued from `Future Ideas.md`; pick any. Order is not priority. Move each into the archive once complete.
+
+Open design threads:
+- *Mobile Outpost* card effect — currently a stub returning "Not yet implemented".
+- *Supply Drop* card effect — currently a stub returning "Not yet implemented".
+- *Chronomancer unlock condition* — TBD (see Phase 17).
+
+---
+
+### Phase 13 — Bugfix & dev tooling (small)
+
+Focused cleanup: one reported gameplay bug + two read-only console commands. Quick win, isolated changes.
+
+- **Bug:** Chronologist is supposed to auto-clear REPAIRED-color cubes on arrival at a new location. Tests in `tests/roles.spec.lua` cover this for `tryTravel` and `tryTeleport`, but the user reports it doesn't fire in-game — investigate whether (a) the hook isn't being applied on `tryCoordinatorMove` / event-card moves like Temporal Slip, (b) the `onArrive` fire site is missing somewhere, or (c) the test passes but the code path is dead. Files: `src/rules/actions.lua`, `src/rules/roles.lua`, possibly `main.lua` if event-card moves are missing the fire.
+- **Console:** add `showPlayerDeck` and `showThreatDeck` to `src/debug/console.lua` — print contents in draw order (top of deck first). One-line entries `<idx>: <name> (<details>)`.
+- Tests: extend `tests/roles.spec.lua` with whichever arrival path was broken; console additions don't need tests (they're print-only).
+
+---
+
+### Phase 14 — Turn flow polish (medium)
+
+Two related changes to how the action loop feels.
+
+- **Don't auto-end turn at actions=0.** Today `spendAction → endAction` advances phases as soon as actions hit zero. New behavior: when `actionsRemaining == 0`, stay in `phase = "action"` so the player can still play event cards (free). Only `End Turn` button click calls `advancePhase`. Disable Travel/Teleport/Build/Clear/Resolve buttons when out of actions (event cards remain playable). Files: `main.lua` (`spendAction`, `endAction`, button enable predicates), `src/ui/actions.lua` (visual disabled state).
+- **Unified click-to-move.** Click on any (city, period) node on the map and the game decides the action:
+  - Adjacent same-period or via-Outpost → Travel.
+  - Have the matching destination card → prompt to Teleport.
+  - Have a card matching current location → prompt to Teleport Alt.
+  - Have both kinds of cards → modal asking which to use.
+  - No legal path → flash error / showMsg.
+
+  The `Travel` / `Teleport` / `Teleport Alt` buttons become redundant; consider removing or repurposing as filter toggles. Files: `main.lua` (`handleMapClick`), `src/rules/actions.lua` (consider a `tryMove(state, city, period)` dispatcher). Tests: `tests/actions.spec.lua` add `tryMove` coverage for each branch.
+
+---
+
+### Phase 15 — Map and hand UX cleanup (medium)
+
+Map zoom is awful — rip it out. Hand needs scrolling + sorting. Modals need richer hover.
+
+- **Remove map zoom/scroll/pan.** Lock the camera to a fixed 2×2 layout sized to the virtual canvas. Files: `src/ui/map.lua` (drop `cam.scale`, scroll handlers, drag logic; keep `getNodeWorld` / `worldToVirtual` but make them identity / static). Drop the `wheelmoved` handler in `main.lua`.
+- **Scroll + sort hand.** Add a horizontal scrollbar (or arrow buttons) when hand > visible width. Add a sort toggle: by color, by period, by type (city/event/flux), or insertion order. Files: `src/ui/hand.lua`, persisted preference on profile (`profile.handSortMode`).
+- **Resolve Anomaly modal — highlight only viable colors.** Compute per-color hand counts and the current `Mod.cardsToResolveAnomaly(state)` threshold; render unavailable colors greyed out and unclickable. Files: `main.lua` (resolve button handler), `src/ui/modals.lua` (item-disabled rendering).
+- **Tooltips inside modals.** Today `Tooltip.suppress()` blocks all tooltips when a modal is open. Replace with a more surgical rule: modal items can `push` their own tooltips during render, and only *non-modal* hit areas get suppressed. Files: `src/ui/tooltip.lua` (add a "modal layer" concept), `src/ui/modals.lua` (push per-item tooltips).
+
+---
+
+### Phase 16 — Status bar readability & instability animation (medium)
+
+Make active game state legible at a glance.
+
+- **Role chip in status area** with tooltip describing the role's ability. Files: `src/ui/footer.lua` (or a new status strip), draws role color swatch + name; reuses `data/roles.lua` description text.
+- **Active-duration effect chips.** Render a chip for every currently active timed effect with a tooltip explaining duration + effect:
+  - `skipNextInstability` (Paradox Barrier played this turn)
+  - `sealedCity` (Temporal Seal target until next instability)
+  - Any challenge mod with a "next turn" / "this round" rider once triggered
+  - Coordinator free-move available / Failsafe retrieve available
+
+  Files: `src/ui/footer.lua` (new chip row), data sourced from `gs`.
+- **Distinguish RESOLVED vs REPAIRED.** Today both look like colored marks. Change REPAIRED to a thick **X** in the anomaly color (RESOLVED stays as a filled square). Files: `src/ui/footer.lua`, anywhere else the resolved tracker is drawn.
+- **Instability animation.** Today threat cards resolve all in one frame. New behavior: queue each card draw + cube placement with a ~2 s gap so the player can watch chaos unfold. Files: `src/ui/anim.lua` (new `threat_reveal` effect showing card name + city/period), `src/rules/phases.lua` `runInstabilityPhase` becomes async — split into steps and drive from the animation queue, or accumulate `pendingThreatSteps` on `gs` and have `main.lua` drain them on a timer. Watch interaction with auto-save (don't save mid-animation). The 2 s gap should be a tunable constant (not hard-coded inline) so Phase 18's options screen can expose it as an "Instability animation speed" slider — store the value on the profile (or global config) and read it at queue time.
+
+---
+
+### Phase 17 — New role: Chronomancer (small)
+
+Locked role with an active deck-manipulation ability.
+
+- **Definition.** In `data/roles.lua`: id `chronomancer`, color (suggest cyan/teal), description "Once per run, look at the top 6 threat cards and reorder them.", and an `unlockHint`.
+- **Unlock condition.** Suggest: *win a Heroic run with no Teleport actions used* (mirrors Temporal Analyst's no-upgrade flavor — discipline-based). Track `gs.teleportsUsed = 0` / increment in `tryTeleport` + `tryTeleportAlt`. Add to `src/rules/unlocks.lua` and `data/roles.lua`. Open to alternative gating.
+- **Ability.** `APPLY.chronomancer = function(state) end` — no passive. State: `chronomancerUsed = false` on init. Button `reorder_threat` (free; not 1 action — design choice, document on tooltip), visible when role matches and not yet used.
+- **UI.** New modal that shows the top 6 of `gs.threatDeck` with arrow controls (or drag) to reorder; on confirm, write back to deck. Files: `src/ui/modals.lua` add a `Modals.newReorder(title, items, onConfirm)` variant, or build a one-off modal type.
+- **Tests.** `tests/roles.spec.lua` Chronomancer block: ability flips the deck order; second call fails; works on decks shorter than 6.
+
+---
+
+### Phase 18 — Main menu, profile names, options (medium)
+
+Wrap the run loop in a proper menu shell.
+
+- **Profile naming.** When creating a profile, prompt for a name (text input field, max ~16 chars). Store as `profile.name`. Files: `src/ui/profileSelect.lua`, `src/persistence/save.lua` (newProfile signature).
+- **Main menu screen.** New phase `"mainmenu"`. Buttons:
+  - **Resume Last Run** (enabled iff `profile.activeRun ~= nil`)
+  - **New Run** → goes to role select
+  - **Change Profile** → profile select; shows current profile name on the button face
+  - **Options**
+
+  Files: new `src/ui/mainMenu.lua`, wire into `main.lua` phase machine. Boot path becomes `profileselect → mainmenu` (instead of `profileselect → setup` straight into a run).
+- **Options screen.** New phase `"options"` (or modal overlay). Settings:
+  - Music on/off, music volume slider, SFX volume slider — persisted on profile (or global config file)
+  - Starting resolution dropdown (1280×720, 1600×900, 1920×1080, fullscreen)
+  - Quit Run (returns to main menu, abandons current run with confirm dialog)
+  - Exit Game (`love.event.quit()` with confirm)
+
+  Files: new `src/ui/options.lua`, audio hookups in `src/audio/sounds.lua` (volume globals + `love.audio.setVolume`), persistence in `save.lua`.
+- **Tests.** Profile naming round-trips through save/load; options persistence; main menu enable-state for Resume button.
+
+---
+
+### Phase 19 — Demo mode & itch.io web release (large)
+
+Packaging work; mostly outside the Lua codebase.
+
+- **Demo mode flag.** Build flag (env var, conf.lua constant, or compile-time switch) gating:
+  - Limit to one complete run total (after gameover, all menu paths except Exit are disabled or the game just exits).
+  - Disable persistence entirely (no save files written; profile picker hidden or single-slot).
+  - Optionally a "Buy the full game" CTA on gameover.
+
+  Files: `conf.lua` (or a new `src/config.lua`), gates in `main.lua`, `src/persistence/save.lua`, `src/ui/gameOver.lua`.
+- **Web build.** Compile with [love.js](https://github.com/Davidobot/love.js) (or successor) to produce a static WASM bundle. Verify: file I/O via `love.filesystem` works in browser; audio doesn't break; canvas sizing behaves on resize. Document the build command in this file.
+- **itch.io deploy.** Two listings: demo (free, web-playable) and full version (paid, web + native zips). Use `butler` for upload pipeline. Document the release checklist (bump version in `conf.lua`, run tests, package zip, push to butler) in a new top-level `RELEASE.md` or under this phase.
+- This phase has no unit tests — verify by running the actual web build on itch.io's draft preview.
+
+---
+
+<details>
+<summary><strong>Completed Phases (archive)</strong> — click to expand</summary>
+
 ### Phase 0 — Project scaffolding ✓
 - Lua + Love2D project skeleton; `main.lua` boots a stub scene.
 - Busted set up; `busted` from project root passes a sample test.
@@ -562,3 +681,5 @@ Implemented all 5 missing locked-role abilities. Also fixed a latent bug where `
 ### Cross-cutting / always-on
 - New code ships with Busted tests in `tests/`; `busted` is green before any UI work merges.
 - All rule lookups go through the modifier pipeline once Phase 3 lands — never bypass it.
+
+</details>
