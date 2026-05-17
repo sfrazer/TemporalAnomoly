@@ -22,6 +22,7 @@ local RoleSelect       = require("src.ui.roleSelect")
 local ProfileSelect    = require("src.ui.profileSelect")
 local MetaShop         = require("src.ui.metaShop")
 local DifficultySelect = require("src.ui.difficultySelect")
+local GameOver         = require("src.ui.gameOver")
 
 -- ---------------------------------------------------------------------------
 -- Layout (virtual 1280×720)
@@ -525,25 +526,8 @@ function love.draw()
     end
 
     -- Game over overlay
-    if phase == "gameover" and gameResult then
-        love.graphics.setColor(0, 0, 0, 0.75)
-        love.graphics.rectangle("fill", 0, 0, VIRTUAL_W, VIRTUAL_H)
-        local won = gameResult.result == "won"
-        love.graphics.setColor(won and 0.2 or 0.8, won and 0.8 or 0.2, 0.2)
-        love.graphics.printf(won and "VICTORY" or "DEFEAT", 0, 278, VIRTUAL_W, "center")
-        love.graphics.setColor(0.9, 0.9, 0.9)
-        love.graphics.printf(gameResult.reason or "", 0, 326, VIRTUAL_W, "center")
-        if gameResult.earnedRP then
-            love.graphics.setColor(0.90, 0.82, 0.30)
-            love.graphics.printf("+" .. gameResult.earnedRP .. " RP earned", 0, 356, VIRTUAL_W, "center")
-        end
-        if gameResult.newUnlocks and #gameResult.newUnlocks > 0 then
-            love.graphics.setColor(0.60, 0.90, 0.65)
-            love.graphics.printf("Unlocked: " .. table.concat(gameResult.newUnlocks, ", "),
-                                 0, 386, VIRTUAL_W, "center")
-        end
-        love.graphics.setColor(0.6, 0.6, 0.65)
-        love.graphics.printf("Press R to restart", 0, 416, VIRTUAL_W, "center")
+    if phase == "gameover" then
+        GameOver.render(gameResult)
     end
 
     -- Actions remaining indicator
@@ -637,6 +621,21 @@ function love.mousepressed(sx, sy, button)
         return
     end
 
+    -- Game over screen
+    if phase == "gameover" then
+        if button == 1 then
+            local action = GameOver.hit(vx, vy)
+            if action == "play_again" then
+                startGame(selectedRole)
+            elseif action == "return_to_shop" then
+                enterShop(selectedDifficulty)
+            elseif action == "change_role" then
+                phase = "setup"
+            end
+        end
+        return
+    end
+
     -- Modal absorbs all clicks
     if modal then
         local value = Modals.click(modal, vx, vy)
@@ -698,6 +697,6 @@ function love.keypressed(key)
 
     if key == "escape" then love.event.quit() end
     if key == "r" and phase == "gameover" then
-        enterProfileSelect()
+        phase = "setup"
     end
 end
