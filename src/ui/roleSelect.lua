@@ -32,7 +32,7 @@ local function gridPositions()
     return positions
 end
 
-function M.render()
+function M.render(profile)
     -- Background
     love.graphics.setColor(0.04, 0.05, 0.08)
     love.graphics.rectangle("fill", 0, 0, 1280, 720)
@@ -47,7 +47,8 @@ function M.render()
     for _, pos in ipairs(positions) do
         local role   = pos.role
         local x, y  = pos.x, pos.y
-        local locked = not role.unlocked
+        local unlocks = profile and profile.roleUnlocks or {}
+        local locked = not (role.unlocked or unlocks[role.id])
         local rc     = locked and LOCKED_COLOR or role.color
 
         -- Card body
@@ -86,10 +87,12 @@ function M.render()
 end
 
 -- Returns role id if an unlocked card was clicked, nil otherwise
-function M.hit(vx, vy)
+function M.hit(vx, vy, profile)
     local positions = gridPositions()
+    local unlocks = profile and profile.roleUnlocks or {}
     for _, pos in ipairs(positions) do
-        if not pos.role.unlocked then goto continue end
+        local locked = not (pos.role.unlocked or unlocks[pos.role.id])
+        if locked then goto continue end
         if vx >= pos.x and vx <= pos.x + CARD_W
         and vy >= pos.y and vy <= pos.y + CARD_H then
             return pos.role.id

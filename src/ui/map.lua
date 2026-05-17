@@ -100,6 +100,13 @@ local function drawCity(state, cityId, periodId, qx, qy, pc, isPlayer)
     love.graphics.setLineWidth(2)
     love.graphics.circle("line", x, y, NODE_R)
 
+    -- Priority City gold ring (Legendary only)
+    if state.priorityCity and cityId == state.priorityCity then
+        love.graphics.setColor(0.95, 0.82, 0.10, 0.90)
+        love.graphics.setLineWidth(3)
+        love.graphics.circle("line", x, y, NODE_R + 7)
+    end
+
     -- Player pawn
     if isPlayer then
         love.graphics.setColor(1, 1, 1, 0.95)

@@ -70,6 +70,7 @@ function M.newProfile()
         bonusSelections   = {},
         deckSelections    = {},
         challengeModIds   = {},
+        selectedDifficulty = "standard",
     }
 end
 
@@ -99,6 +100,7 @@ function M.serializeState(gs)
         challengeModIds      = gs.challengeModIds,
         teleportBannedTurns  = gs.teleportBannedTurns,
         volatileAnomalyActive = gs.volatileAnomalyActive,
+        hadDeckUpgrades      = gs.hadDeckUpgrades,
         lost                 = gs.lost,
     }
 end
