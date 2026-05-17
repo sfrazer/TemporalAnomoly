@@ -2,8 +2,45 @@ local util      = require("src.util")
 local Mod       = require("src.state.modifiers")
 local flux      = require("src.rules.flux")
 local explosion = require("src.rules.explosion")
+local cities    = require("data.cities")
+local periods   = require("data.periods")
 
 local M = {}
+
+local function applyChallengeModEffect(state, card)
+    if card.id == "hotspot" then
+        local valid = {}
+        for _, c in ipairs(cities) do
+            for _, p in ipairs(periods) do
+                if not state.repaired[p.color] then
+                    valid[#valid + 1] = {city = c.id, period = p.id, color = p.color}
+                end
+            end
+        end
+        if #valid > 0 then
+            local s = valid[math.random(#valid)]
+            explosion.placeCubesAt(state, s.city, s.period, s.color, 2)
+        end
+
+    elseif card.id == "cascade_event" then
+        for _ = 1, 2 do
+            local extra = util.drawTop(state.threatDeck)
+            if extra then
+                state.threatDiscard[#state.threatDiscard + 1] = extra
+                if extra.type == "threat" and not state.repaired[extra.color] then
+                    local cubes = Mod.cubesPerThreatCard(state)
+                    explosion.placeCubesAt(state, extra.city, extra.period, extra.color, cubes)
+                end
+            end
+        end
+
+    elseif card.id == "volatile_anomaly" then
+        state.volatileAnomalyActive = true
+
+    elseif card.id == "temporal_ban" then
+        state.teleportBannedTurns = (state.teleportBannedTurns or 0) + 1
+    end
+end
 
 function M.runDrawPhase(state)
     local n = Mod.cardsDrawnPerTurn(state)
@@ -30,10 +67,14 @@ function M.runInstabilityPhase(state)
         local card = util.drawTop(state.threatDeck)
         if card then
             state.threatDiscard[#state.threatDiscard + 1] = card
-            Mod.onThreatCardDraw(state, {card = card})
-            if not state.repaired[card.color] then
-                local cubes = Mod.cubesPerThreatCard(state)
-                explosion.placeCubesAt(state, card.city, card.period, card.color, cubes)
+            if card.type == "challengemod" then
+                applyChallengeModEffect(state, card)
+            else
+                Mod.onThreatCardDraw(state, {card = card})
+                if not state.repaired[card.color] then
+                    local cubes = Mod.cubesPerThreatCard(state)
+                    explosion.placeCubesAt(state, card.city, card.period, card.color, cubes)
+                end
             end
         end
     end

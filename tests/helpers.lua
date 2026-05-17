@@ -33,8 +33,11 @@ function H.makeState(overrides)
         difficulty           = "standard",
         priorityCity         = nil,
         lost                 = nil,
-        role                 = nil,
-        coordinatorMoveUsed  = false,
+        role                  = nil,
+        coordinatorMoveUsed   = false,
+        challengeModIds       = {},
+        teleportBannedTurns   = 0,
+        volatileAnomalyActive = false,
     }
     if overrides then
         for k, v in pairs(overrides) do state[k] = v end

@@ -67,6 +67,9 @@ function M.newProfile()
         runHistory        = {},
         activeRun         = nil,
         lastRole          = "chronologist",
+        bonusSelections   = {},
+        deckSelections    = {},
+        challengeModIds   = {},
     }
 end
 
@@ -93,6 +96,9 @@ function M.serializeState(gs)
         priorityCity         = gs.priorityCity,
         role                 = gs.role,
         coordinatorMoveUsed  = gs.coordinatorMoveUsed,
+        challengeModIds      = gs.challengeModIds,
+        teleportBannedTurns  = gs.teleportBannedTurns,
+        volatileAnomalyActive = gs.volatileAnomalyActive,
         lost                 = gs.lost,
     }
 end
