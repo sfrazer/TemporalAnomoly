@@ -195,9 +195,20 @@ local function handleButtonClick(id)
     end
 
     if id == "clear" then
-        modal = Modals.new("Clear which anomaly color?", COLOR_ITEMS, function(color)
-            spendAction(function() return Actions.tryClear(gs, color) end)
-        end)
+        local node = gs.cubes[gs.currentCity][gs.currentPeriod]
+        local present = {}
+        for _, item in ipairs(COLOR_ITEMS) do
+            if (node[item.value] or 0) > 0 then
+                present[#present + 1] = item
+            end
+        end
+        if #present > 1 then
+            modal = Modals.new("Clear which anomaly color?", present, function(color)
+                spendAction(function() return Actions.tryClear(gs, color) end)
+            end)
+        else
+            spendAction(function() return Actions.tryClear(gs) end)
+        end
         return
     end
 

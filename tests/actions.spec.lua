@@ -142,6 +142,21 @@ describe("src.rules.actions", function()
             assert.is_false(ok)
         end)
 
+        it("auto-selects the color with the most cubes when no color given", function()
+            state.cubes["atlanta"]["modern"]["blue"]  = 1
+            state.cubes["atlanta"]["modern"]["black"] = 3
+            local ok = actions.tryClear(state)
+            assert.is_true(ok)
+            assert.equal(2, state.cubes["atlanta"]["modern"]["black"])
+            assert.equal(1, state.cubes["atlanta"]["modern"]["blue"])
+        end)
+
+        it("fails when no cubes at location and no color given", function()
+            local ok, err = actions.tryClear(state)
+            assert.is_false(ok)
+            assert.not_nil(err)
+        end)
+
         it("marks anomaly REPAIRED when RESOLVED and board reaches 0", function()
             state.cubes["atlanta"]["modern"]["black"] = 1
             state.resolved["black"] = true

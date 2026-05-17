@@ -115,6 +115,17 @@ end
 
 function M.tryClear(state, color)
     local node = state.cubes[state.currentCity][state.currentPeriod]
+    if not color then
+        local best, bestCount = nil, 0
+        for _, c in ipairs(util.COLORS) do
+            local n = node[c] or 0
+            if n > bestCount then best = c; bestCount = n end
+        end
+        if not best then
+            return false, "no anomaly cubes at " .. state.currentCity .. "/" .. state.currentPeriod
+        end
+        color = best
+    end
     if (node[color] or 0) == 0 then
         return false, "no " .. color .. " cubes at " ..
             state.currentCity .. "/" .. state.currentPeriod
