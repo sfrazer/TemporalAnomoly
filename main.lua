@@ -14,6 +14,7 @@ local Explosion     = require("src.rules.explosion")
 local Console       = require("src.debug.console")
 local Tooltip       = require("src.ui.tooltip")
 local Anim          = require("src.ui.anim")
+local Sounds        = require("src.audio.sounds")
 
 local Map              = require("src.ui.map")
 local Hand             = require("src.ui.hand")
@@ -89,6 +90,7 @@ local function endAction()
             Save.saveProfile(slot, profile)
         end
         gameResult = {result = result, reason = reason, earnedRP = earnedRP, newUnlocks = newUnlocks}
+        if result == "won" then Sounds.win() else Sounds.lose() end
         AutoSave.finish()
         -- Re-init so the profile (now with updated RP and no activeRun) stays
         -- accessible for Return to Shop / Play Again flows.
@@ -260,6 +262,7 @@ end
 local function handleButtonClick(id)
     if phase ~= "action" then showMsg("Not your action phase"); return end
     activeBtn = id
+    Sounds.buttonClick()
 
     if id == "end_turn" then
         advancePhase()
@@ -351,6 +354,7 @@ initAnims = function()
             local vx, vy = Map.worldToVirtual(wx, wy)
             Anim.cubePlaced(vx, vy, ctx.color)
         end
+        Sounds.cubePlaced()
     end)
     Mod.register("onTemporalExplosion", function(state, ctx)
         local wx, wy = Map.getNodeWorld(ctx.city, ctx.period)
@@ -358,9 +362,11 @@ initAnims = function()
             local vx, vy = Map.worldToVirtual(wx, wy)
             Anim.explosion(vx, vy)
         end
+        Sounds.explosion()
     end)
     Mod.register("onChronologicalFlux", function()
         Anim.fluxPulse()
+        Sounds.flux()
     end)
 end
 
