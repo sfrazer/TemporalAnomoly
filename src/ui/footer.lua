@@ -1,6 +1,7 @@
 local unpack  = table.unpack or unpack  -- LuaJIT (Love2D) vs Lua 5.2+
 local util    = require("src.util")
 local Tooltip = require("src.ui.tooltip")
+local Shapes  = require("src.ui.shapes")
 
 local M = {}
 
@@ -53,9 +54,13 @@ function M.render(state, footerY, footerH)
         local supply = util.cubeSupply(state, color)
         local warn   = supply <= 4
         local csx    = x
+        local midY   = y + font:getHeight() / 2
+        -- Shape icon + label (K for blacK to avoid B collision with Blue)
         love.graphics.setColor(unpack(COLOR_ACCENT[color]))
-        love.graphics.print(color:sub(1,1):upper() .. ":", x, y)
-        x = x + font:getWidth(color:sub(1,1):upper() .. ":") + 3
+        Shapes.draw(color, x + 5, midY, 8)
+        x = x + 10 + 2
+        love.graphics.print(Shapes.LABEL[color] .. ":", x, y)
+        x = x + font:getWidth(Shapes.LABEL[color] .. ":") + 3
         love.graphics.setColor(unpack(warn and WARN_COLOR or NORMAL_COLOR))
         love.graphics.print(tostring(supply), x, y)
         x = x + font:getWidth(tostring(supply)) + sp*2

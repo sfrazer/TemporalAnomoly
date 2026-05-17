@@ -1,4 +1,5 @@
 local Tooltip = require("src.ui.tooltip")
+local Shapes  = require("src.ui.shapes")
 
 local M = {}
 
@@ -64,6 +65,9 @@ function M.render(state, handY, selected)
             love.graphics.setColor(pc[1], pc[2], pc[3], 0.85)
             local period = card.name:match("%((.-)%)") or ""
             love.graphics.printf(period, x+5, handY+38, CARD_W-10, "center")
+            -- Shape badge in top-right corner of accent bar
+            love.graphics.setColor(0.05, 0.06, 0.09, 0.85)
+            Shapes.draw(card.color, x + CARD_W - 8, handY + 3, 7)
         elseif card.type == "event" then
             love.graphics.setColor(0.85, 0.7, 1)
             love.graphics.printf(card.name, x+5, handY+10, CARD_W-10, "center")
