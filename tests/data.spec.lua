@@ -131,10 +131,10 @@ describe("data.cards", function()
         it("contains all required event ids", function()
             local ids = {}
             for _, c in ipairs(cards.eventCards) do ids[c.id] = true end
-            assert.is_true(ids["one_quiet_night"],      "Missing one_quiet_night")
-            assert.is_true(ids["government_grant"],     "Missing government_grant")
-            assert.is_true(ids["temporal_slip"],        "Missing temporal_slip")
-            assert.is_true(ids["resilient_population"], "Missing resilient_population")
+            assert.is_true(ids["paradox_barrier"],    "Missing paradox_barrier")
+            assert.is_true(ids["unknown_assistance"], "Missing unknown_assistance")
+            assert.is_true(ids["temporal_slip"],      "Missing temporal_slip")
+            assert.is_true(ids["chrono_lock"],        "Missing chrono_lock")
         end)
     end)
 

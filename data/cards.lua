@@ -23,14 +23,14 @@ end
 M.eventCards = {
     {
         type        = "event",
-        id          = "one_quiet_night",
-        name        = "One Quiet Night",
+        id          = "paradox_barrier",
+        name        = "Paradox Barrier",
         description = "Skip the next Instability Phase.",
     },
     {
         type        = "event",
-        id          = "government_grant",
-        name        = "Government Grant",
+        id          = "unknown_assistance",
+        name        = "Unknown Assistance",
         description = "Place a Temporal Outpost in any city; no discard required.",
     },
     {
@@ -41,8 +41,8 @@ M.eventCards = {
     },
     {
         type        = "event",
-        id          = "resilient_population",
-        name        = "Resilient Population",
+        id          = "chrono_lock",
+        name        = "Chrono Lock",
         description = "Remove 1 card from the threat discard so it does not return on reshuffle.",
     },
 }

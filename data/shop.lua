@@ -14,16 +14,16 @@ M.startingBonuses = {
 }
 
 M.deckCards = {
-    {id = "stabilizer_cache",   name = "Stabilizer Cache",   cost = 3, maxCopies = 2,
-     description = "Clear all cubes of 1 color in your current city"},
-    {id = "mobile_outpost",     name = "Mobile Outpost",     cost = 4, maxCopies = 2,
-     description = "Build a Temporal Outpost without discarding a card"},
-    {id = "emergency_protocol", name = "Emergency Protocol", cost = 5, maxCopies = 2,
+    {id = "chronological_rewind", name = "Chronological Rewind", cost = 3, maxCopies = 2,
+     description = "Clear all cubes of 1 color across all periods of current city"},
+    {id = "mobile_outpost",       name = "Mobile Outpost",       cost = 4, maxCopies = 2,
+     description = "Not yet implemented"},
+    {id = "time_corridor",        name = "Time Corridor",        cost = 5, maxCopies = 2,
      description = "+2 actions this turn"},
-    {id = "temporal_seal",      name = "Temporal Seal",      cost = 4, maxCopies = 2,
+    {id = "temporal_seal",        name = "Temporal Seal",        cost = 4, maxCopies = 2,
      description = "Prevent all incidents in 1 city for 1 round"},
-    {id = "supply_drop",        name = "Supply Drop",        cost = 3, maxCopies = 2,
-     description = "Restore 3 cubes to any depleted anomaly supply"},
+    {id = "supply_drop",          name = "Supply Drop",          cost = 3, maxCopies = 2,
+     description = "Not yet implemented"},
 }
 
 M.challengeMods = {

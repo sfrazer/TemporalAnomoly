@@ -138,6 +138,8 @@ function M.new(opts)
         teleportBannedTurns   = 0,
         volatileAnomalyActive = false,
         hadDeckUpgrades       = #extraDeckCards > 0,
+        skipNextInstability   = false,
+        sealedCity            = nil,
     }
 
     if startingOutpost then

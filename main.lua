@@ -54,7 +54,8 @@ local profilesCache     -- [slot] = profile_table_or_nil, used by profileselect
 local selectedRole      -- role id chosen on role-select screen, held until shop commits
 local selectedDifficulty -- difficulty id chosen before shop, held until commitShop
 local shopState         -- pending shop selections {bonusSelections, deckSelections, challengeModIds}
-local initAnims         -- forward declaration; defined below initConsole
+local initAnims         -- forward declaration; defined below action handlers
+local handleCardPlay    -- forward declaration; defined alongside initAnims
 
 -- ---------------------------------------------------------------------------
 -- Helpers
@@ -109,6 +110,7 @@ local function advancePhase()
         Anim.phaseBanner("Instability Phase", 0.70)
         phase = "instability"
         Phases.runInstabilityPhase(gs)
+        gs.sealedCity = nil
         if gs.lost then endAction(); return end
         phase = "action"
         gs.actionsRemaining    = Mod.actionsPerTurn(gs)
@@ -348,6 +350,9 @@ end
 -- Animation event hooks (re-registered after every Mod.clear())
 -- ---------------------------------------------------------------------------
 initAnims = function()
+    Mod.register("canPlaceCube", function(state, city, period, color)
+        if state.sealedCity and city == state.sealedCity then return false end
+    end)
     Mod.register("onCubePlaced", function(state, ctx)
         local wx, wy = Map.getNodeWorld(ctx.city, ctx.period)
         if wx then
@@ -368,6 +373,117 @@ initAnims = function()
         Anim.fluxPulse()
         Sounds.flux()
     end)
+end
+
+-- ---------------------------------------------------------------------------
+-- Card play flow
+-- ---------------------------------------------------------------------------
+handleCardPlay = function(card, cardIdx)
+    local id = card.id
+
+    -- No-modal cards
+    if id == "paradox_barrier" or id == "time_corridor" or
+       id == "mobile_outpost"  or id == "supply_drop" then
+        local ok, err = Actions.tryPlayCard(gs, cardIdx)
+        selectedCard = nil
+        if ok then
+            showMsg(card.name .. " played")
+            endAction()
+        else
+            showMsg(err or "Cannot play card")
+        end
+        return
+    end
+
+    -- Unknown Assistance: city picker
+    if id == "unknown_assistance" then
+        modal = Modals.new("Build Outpost in which city?", cityItems, function(cityId)
+            local ok, err = Actions.tryPlayCard(gs, cardIdx, cityId)
+            selectedCard = nil
+            if ok then
+                showMsg("Temporal Outpost built in " .. cityId)
+                endAction()
+            else
+                showMsg(err or "Cannot play card")
+            end
+        end)
+        return
+    end
+
+    -- Temporal Slip: city picker → period picker
+    if id == "temporal_slip" then
+        modal = Modals.new("Slip to which city?", cityItems, function(cityId)
+            modal = Modals.new("Which time period?", PERIOD_ITEMS, function(periodId)
+                local ok, err = Actions.tryPlayCard(gs, cardIdx, cityId, periodId)
+                selectedCard = nil
+                if ok then
+                    showMsg("Slipped to " .. cityId)
+                    endAction()
+                else
+                    showMsg(err or "Cannot play card")
+                end
+            end)
+        end)
+        return
+    end
+
+    -- Chrono Lock: pick card from threat discard to permanently remove
+    if id == "chrono_lock" then
+        if #gs.threatDiscard == 0 then
+            showMsg("Threat discard is empty")
+            selectedCard = nil
+            return
+        end
+        local items = {}
+        for i, c in ipairs(gs.threatDiscard) do
+            items[#items + 1] = {label = c.name or c.id, value = i}
+        end
+        modal = Modals.new("Remove which threat card permanently?", items, function(idx)
+            local ok, err = Actions.tryPlayCard(gs, cardIdx, idx)
+            selectedCard = nil
+            if ok then
+                showMsg("Threat card permanently removed")
+                endAction()
+            else
+                showMsg(err or "Cannot play card")
+            end
+        end)
+        return
+    end
+
+    -- Chronological Rewind: color picker
+    if id == "chronological_rewind" then
+        modal = Modals.new("Clear which anomaly color from " .. gs.currentCity .. "?",
+            COLOR_ITEMS, function(color)
+                local ok, err = Actions.tryPlayCard(gs, cardIdx, color)
+                selectedCard = nil
+                if ok then
+                    showMsg("All " .. color .. " cubes cleared from " .. gs.currentCity)
+                    endAction()
+                else
+                    showMsg(err or "Cannot play card")
+                end
+            end)
+        return
+    end
+
+    -- Temporal Seal: city picker
+    if id == "temporal_seal" then
+        modal = Modals.new("Seal which city against incidents?", cityItems, function(cityId)
+            local ok, err = Actions.tryPlayCard(gs, cardIdx, cityId)
+            selectedCard = nil
+            if ok then
+                showMsg(cityId .. " sealed until next Instability Phase")
+                endAction()
+            else
+                showMsg(err or "Cannot play card")
+            end
+        end)
+        return
+    end
+
+    showMsg("This card has no effect yet")
+    selectedCard = nil
 end
 
 -- ---------------------------------------------------------------------------
@@ -708,7 +824,16 @@ function love.mousepressed(sx, sy, button)
 
         local cardIdx = Hand.hitCard(vx, vy, gs, LAYOUT.handY)
         if cardIdx then
-            selectedCard = (selectedCard == cardIdx) and nil or cardIdx
+            if selectedCard == cardIdx then
+                local card = gs.hand[cardIdx]
+                if phase == "action" and card.type == "event" then
+                    handleCardPlay(card, cardIdx)
+                else
+                    selectedCard = nil
+                end
+            else
+                selectedCard = cardIdx
+            end
         end
     end
 end
