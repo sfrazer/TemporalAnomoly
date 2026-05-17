@@ -2,6 +2,7 @@ local unpack  = table.unpack or unpack  -- LuaJIT (Love2D) vs Lua 5.2+
 local cities  = require("data.cities")
 local periods = require("data.periods")
 local Tooltip = require("src.ui.tooltip")
+local Shapes  = require("src.ui.shapes")
 
 local M = {}
 
@@ -129,7 +130,7 @@ local function drawCity(state, cityId, periodId, qx, qy, pc, isPlayer)
     local tw = font:getWidth(name)
     love.graphics.print(name, x - tw/2, y + NODE_R + 2)
 
-    -- Cube stacks (4 colors, side by side, above node)
+    -- Cube stacks: color + distinct shape per anomaly for accessibility
     local cs = 8; local gap = 2; local stackMax = 3
     local totalW = 4 * cs + 3 * gap
     local startX = x - totalW/2
@@ -137,10 +138,9 @@ local function drawCity(state, cityId, periodId, qx, qy, pc, isPlayer)
         local n = math.min(cubes[color] or 0, stackMax)
         for i = 1, n do
             love.graphics.setColor(unpack(CUBE_COLOR[color]))
-            love.graphics.rectangle("fill",
-                startX + (ci-1)*(cs+gap),
-                y - NODE_R - 4 - i*(cs+1),
-                cs, cs, 1)
+            local cx = startX + (ci-1)*(cs+gap) + cs/2
+            local cy = y - NODE_R - 4 - i*(cs+1) + cs/2
+            Shapes.draw(color, cx, cy, cs)
         end
     end
 
