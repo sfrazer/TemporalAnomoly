@@ -1,6 +1,7 @@
-local util      = require("src.util")
-local cities    = require("data.cities")
-local periods   = require("data.periods")
+local util    = require("src.util")
+local Mod     = require("src.state.modifiers")
+local cities  = require("data.cities")
+local periods = require("data.periods")
 
 local cityById = {}
 for _, c in ipairs(cities) do cityById[c.id] = c end
@@ -10,8 +11,6 @@ for _, p in ipairs(periods) do PERIOD_IDS[#PERIOD_IDS + 1] = p.id end
 
 local M = {}
 
--- Remove up to n cards matching pred from hand; returns array of removed cards
--- or false if fewer than n matched.
 local function takeFromHand(hand, pred, n)
     n = n or 1
     local removed = {}
@@ -28,7 +27,6 @@ local function takeFromHand(hand, pred, n)
     return removed
 end
 
--- Travel: adjacent city same period, OR same city different period via Outpost.
 function M.tryTravel(state, destCity, destPeriod)
     destPeriod = destPeriod or state.currentPeriod
 
@@ -36,7 +34,13 @@ function M.tryTravel(state, destCity, destPeriod)
         return false, "already at destination"
     end
 
-    -- Cross-period (same city): requires Outpost
+    local from = {city = state.currentCity, period = state.currentPeriod}
+    local to   = {city = destCity,          period = destPeriod}
+
+    if not Mod.canTravel(state, from, to) then
+        return false, "travel blocked"
+    end
+
     if destCity == state.currentCity then
         if not state.outposts[state.currentCity] then
             return false, "no Temporal Outpost in " .. state.currentCity
@@ -45,7 +49,6 @@ function M.tryTravel(state, destCity, destPeriod)
         return true
     end
 
-    -- Same-period: destination must be adjacent; period must match
     if destPeriod ~= state.currentPeriod then
         return false, "cannot change both city and period in one Travel action"
     end
@@ -60,7 +63,6 @@ function M.tryTravel(state, destCity, destPeriod)
     return false, destCity .. " is not adjacent to " .. state.currentCity
 end
 
--- Teleport: discard a (city, period) card -> move to that city/period.
 function M.tryTeleport(state, cardCity, cardPeriod)
     local removed = takeFromHand(state.hand, function(c)
         return c.type == "city" and c.city == cardCity and c.period == cardPeriod
@@ -74,7 +76,6 @@ function M.tryTeleport(state, cardCity, cardPeriod)
     return true
 end
 
--- Teleport (alternate): discard current location card -> move anywhere.
 function M.tryTeleportAlt(state, destCity, destPeriod)
     local removed = takeFromHand(state.hand, function(c)
         return c.type == "city"
@@ -90,10 +91,12 @@ function M.tryTeleportAlt(state, destCity, destPeriod)
     return true
 end
 
--- Build Temporal Outpost: discard any card for current city -> outpost in all periods.
 function M.tryBuildOutpost(state)
     if state.outposts[state.currentCity] then
         return false, "Temporal Outpost already exists in " .. state.currentCity
+    end
+    if not Mod.canBuildOutpost(state, state.currentCity) then
+        return false, "building blocked"
     end
     local removed = takeFromHand(state.hand, function(c)
         return c.type == "city" and c.city == state.currentCity
@@ -106,7 +109,6 @@ function M.tryBuildOutpost(state)
     return true
 end
 
--- Clear Anomalous Incident: remove 1 cube (or all if anomaly RESOLVED).
 function M.tryClear(state, color)
     local node = state.cubes[state.currentCity][state.currentPeriod]
     if (node[color] or 0) == 0 then
@@ -116,13 +118,14 @@ function M.tryClear(state, color)
     if state.resolved[color] then
         node[color] = 0
     else
-        node[color] = node[color] - 1
+        local ctx      = {city = state.currentCity, period = state.currentPeriod, color = color}
+        local toRemove = Mod.cubesRemovedPerClear(state, ctx)
+        node[color]    = math.max(0, node[color] - toRemove)
     end
     util.updateRepaired(state)
     return true
 end
 
--- RESOLVE Anomaly: at Outpost, discard 5 same-color cards.
 function M.tryResolve(state, color)
     if not state.outposts[state.currentCity] then
         return false, "must be at a Temporal Outpost to RESOLVE"
@@ -130,11 +133,12 @@ function M.tryResolve(state, color)
     if state.resolved[color] then
         return false, color .. " anomaly is already RESOLVED"
     end
+    local needed  = Mod.cardsToResolveAnomaly(state)
     local removed = takeFromHand(state.hand, function(c)
         return c.type == "city" and c.color == color
-    end, 5)
+    end, needed)
     if not removed then
-        return false, "need 5 " .. color .. " cards in hand"
+        return false, "need " .. needed .. " " .. color .. " cards in hand"
     end
     for _, c in ipairs(removed) do
         state.playerDiscard[#state.playerDiscard + 1] = c
