@@ -73,8 +73,22 @@ function M.render(state, footerY, footerH)
     love.graphics.setColor(unpack(NORMAL_COLOR))
     love.graphics.print(tostring(util.instabilityLevel(state)), x, y)
     x = x + font:getWidth(tostring(util.instabilityLevel(state))) + sp*3
-    Tooltip.push(sx, footerY, x - sx, footerH,
-        "Threat cards drawn each Instability Phase.\nAdvances after each Chronological Flux.\nSchedule: 2, 2, 2, 3, 3, 4, 4")
+    do
+        local SCHEDULE = {2, 2, 2, 3, 3, 4, 4}
+        local idx  = state.instabilityIndex or 1
+        local segs = {
+            {t = "Threat cards drawn each Instability Phase.\nAdvances after each Chronological Flux.\nSchedule:  "},
+        }
+        for i, v in ipairs(SCHEDULE) do
+            if i == idx then
+                segs[#segs+1] = {t = tostring(v), r = 0.92, g = 0.22, b = 0.22, bold = true}
+            else
+                segs[#segs+1] = {t = tostring(v), r = 0.50, g = 0.53, b = 0.62}
+            end
+            if i < #SCHEDULE then segs[#segs+1] = {t = "  "} end
+        end
+        Tooltip.push(sx, footerY, x - sx, footerH, segs)
+    end
 
     -- Temporal Explosions
     local explosions = state.explosionCount
