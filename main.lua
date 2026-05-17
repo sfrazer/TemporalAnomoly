@@ -356,16 +356,18 @@ local function handleButtonClick(id)
             local card = gs.threatDeck[#gs.threatDeck - i + 1]
             items[#items + 1] = {label = card.name or card.id, value = i}
         end
-        spendAction(function()
+        -- Spend the action first; endAction() inside spendAction clears modal,
+        -- so the modal must be opened AFTER spendAction returns.
+        spendAction(function() return true end)
+        -- Only show result if the game is still in the action phase (last-action
+        -- peek would trigger phases; items built pre-phase are intentionally stale).
+        if phase == "action" then
             if #items > 0 then
-                modal = Modals.new("Top of Threat Deck:", items, function()
-                    endAction()
-                end)
+                modal = Modals.new("Top of Threat Deck:", items, function() end)
             else
                 showMsg("Threat deck is empty")
             end
-            return true
-        end)
+        end
         return
     end
 end
