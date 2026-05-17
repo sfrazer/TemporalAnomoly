@@ -409,7 +409,11 @@ local function handleMapClick(vx, vy)
     end
 
     if #items == 0 then
-        showMsg("No valid move to " .. destCity .. " / " .. destPeriod)
+        if gs.actionsRemaining <= 0 and not coordAvail then
+            showMsg("No actions left")
+        else
+            showMsg("No valid move to " .. destCity .. " / " .. destPeriod)
+        end
         return
     end
 
