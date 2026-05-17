@@ -320,6 +320,7 @@ function love.draw()
     UIActions.render(LAYOUT.actY, LAYOUT.actH, activeBtn, gs)
     Hand.render(gs, LAYOUT.handY, selectedCard)
     Footer.render(gs, LAYOUT.footerY, LAYOUT.footerH)
+    Modals.render(modal)
 
     -- Feedback message
     if message then

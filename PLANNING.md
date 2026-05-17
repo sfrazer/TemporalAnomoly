@@ -469,6 +469,21 @@ Test after each change by running `busted` from the root of the project.
 - Win/Lose modal with reason, RP earned, Play Again + Shop.
 - Accessibility pass (color-blind cues; 4 anomaly colors carry meaning).
 
+### Phase 11 — Event card effects
+Clicking a selected event card triggers its effect immediately (no action cost). The card is discarded afterward. Cannot be played during Chronological Flux resolution.
+
+- *One Quiet Night* — set `gs.skipNextInstability = true`; respected by `Phases.runInstabilityPhase` (skips and clears the flag).
+- *Government Grant* — city picker modal → place Temporal Outpost in chosen city, no card discard required.
+- *Temporal Slip* — city picker modal → period picker modal → move player to chosen (city, period) for free; fires `Mod.onArrive`.
+- *Resilient Population* — picker modal listing the threat discard pile → permanently remove the chosen card (spliced out so it never returns on reshuffle).
+
+**Implementation touchpoints:**
+- `src/state/gameState.lua` — add `skipNextInstability = false` to initial state.
+- `src/rules/actions.lua` — add `tryPlayEvent(state, card)` dispatcher that routes to per-event logic and returns `(true, discardedCard)` or `(false, err)`.
+- `src/rules/phases.lua` — `runInstabilityPhase` checks and clears `gs.skipNextInstability` before running.
+- `main.lua` — in `love.mousepressed`, when a card click lands on an already-selected event card, call `tryPlayEvent`; multi-step events (Government Grant, Temporal Slip, Resilient Population) open chained modals before resolving.
+- `tests/events.spec.lua` — unit tests for all four effects including edge cases (no threat discard for Resilient Population, outpost already exists for Government Grant).
+
 ### Cross-cutting / always-on
 - New code ships with Busted tests in `tests/`; `busted` is green before any UI work merges.
 - All rule lookups go through the modifier pipeline once Phase 3 lands — never bypass it.
