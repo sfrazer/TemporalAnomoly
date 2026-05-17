@@ -1,0 +1,9 @@
+return {
+    default = {
+        -- lets require("data.cities") resolve to data/cities.lua, etc.
+        lpath     = "./?.lua;./?/init.lua",
+        pattern   = "%.spec%.lua$",
+        recursive = true,
+        ROOT      = {"tests"},
+    }
+}
