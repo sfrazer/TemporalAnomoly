@@ -426,6 +426,11 @@ local function handleMapClick(vx, vy)
         end
     end
 
+    -- Travel is unambiguous — execute immediately without a modal.
+    for _, o in ipairs(moveOpts) do
+        if o == "travel" then execute("travel"); return end
+    end
+
     if #items == 1 then
         execute(items[1].value)
     else
