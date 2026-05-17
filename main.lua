@@ -53,6 +53,7 @@ local profilesCache     -- [slot] = profile_table_or_nil, used by profileselect
 local selectedRole      -- role id chosen on role-select screen, held until shop commits
 local selectedDifficulty -- difficulty id chosen before shop, held until commitShop
 local shopState         -- pending shop selections {bonusSelections, deckSelections, challengeModIds}
+local initAnims         -- forward declaration; defined below initConsole
 
 -- ---------------------------------------------------------------------------
 -- Helpers
@@ -343,7 +344,7 @@ end
 -- ---------------------------------------------------------------------------
 -- Animation event hooks (re-registered after every Mod.clear())
 -- ---------------------------------------------------------------------------
-local function initAnims()
+initAnims = function()
     Mod.register("onCubePlaced", function(state, ctx)
         local wx, wy = Map.getNodeWorld(ctx.city, ctx.period)
         if wx then
