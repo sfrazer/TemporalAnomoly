@@ -63,7 +63,8 @@ TemporalAnomaly/
 │   │   ├── metaShop.lua          -- Research Lab: Starting Bonuses, Deck Upgrades, Challenge Mods
 │   │   ├── difficultySelect.lua  -- 4-option difficulty picker (Introductory → Legendary)
 │   │   ├── gameOver.lua          -- VICTORY/DEFEAT card with Play Again / Return to Shop / Change Role
-│   │   └── tooltip.lua           -- push-then-render hover tooltips; rect and circle hit areas; segment-table rich text
+│   │   ├── tooltip.lua           -- push-then-render hover tooltips; rect and circle hit areas; segment-table rich text
+│   │   └── anim.lua              -- animation queue: cube flash, explosion rings+shake, flux pulse, phase banners
 │   ├── persistence/
 │   │   ├── save.lua              -- binser serialize/deserialize; newProfile, serializeState
 │   │   └── autosave.lua          -- after-action auto-save; getProfile/getSlot accessors
@@ -497,13 +498,15 @@ Make the four anomaly colors distinguishable without relying solely on hue.
 - Shape+color pairing is consistent across map, hand cards, and footer.
 - Implementation touchpoints: `src/ui/map.lua` cube drawing; `src/ui/hand.lua`; `src/ui/footer.lua`.
 
-### Phase 10D — Animations & phase feedback
-Visual feedback so game events read clearly.
-- Brief scale-up flash when a cube is placed; distinct shake/ring when a Temporal Explosion fires.
-- Phase transition banner ("Draw Phase", "Instability Phase") fades in and out for ~0.8s.
-- Chronological Flux: brief screen-edge pulse before resolution begins.
-- `src/ui/anim.lua` — lightweight tweening queue; `update(dt)` called each frame; `render()` drawn on top of everything except the debug console.
-- Implementation touchpoints: `Explosion.placeCubesAt` fires `Anim.cubePlaced`; `Phases.runDrawPhase` fires `Anim.fluxPulse`; `main.lua` draws anim layer.
+### Phase 10D — Animations & phase feedback ✓
+- `src/ui/anim.lua` — animation queue; `update(dt)` / `render()` / `getShakeOffset()`. Four effect types:
+  - **cube_flash** — expanding ring in anomaly color at the node; triggered via new `Mod.onCubePlaced` hook fired from `explosion.lua` after each successful placement.
+  - **explosion** — two concentric orange rings + screen shake (~0.32 s taper); triggered via existing `Mod.onTemporalExplosion` hook.
+  - **flux_pulse** — orange screen-edge glow; triggered via existing `Mod.onChronologicalFlux` hook (already fired in `flux.lua`).
+  - **phase_banner** — "Draw Phase" / "Instability Phase" fade-in/hold/fade-out strip; fired from `advancePhase` in `main.lua`. Accepts a `delay` param so both banners can be queued in the same synchronous call and still play sequentially (Instability delayed 0.7 s).
+- `modifiers.lua`: added `onCubePlaced` fire hook.
+- `map.lua`: added `getNodeWorld(cityId, periodId)` and `worldToVirtual(wx, wy)` for coordinate conversion.
+- `main.lua`: `initAnims()` registers three Modifier handlers; re-called after every `Mod.clear()` in `startGame`/`resumeGame`. Forward-declared as `local initAnims` to fix a nil-at-definition-time crash caused by Lua's local scoping rules.
 
 ### Phase 10E — Sound stubs
 Named audio hook points, all silent, ready for real assets.
