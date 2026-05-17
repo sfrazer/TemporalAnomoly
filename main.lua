@@ -143,6 +143,7 @@ local function resumeGame(runData, slot, profile)
     Roles.applyRole(gs, gs.role)
     RunPrep.applyModifiers(RunPrep.prepOpts(profile or Save.newProfile(), gs.role))
     AutoSave.init(slot, profile)
+    Hand.setSortMode(profile and profile.handSortMode or "insertion")
     phase      = "action"
     modal      = nil
     activeBtn  = nil
@@ -164,6 +165,7 @@ local function startGame(roleId)
     if profile then profile.lastRole = roleId end
     AutoSave.init(slot, profile)
     AutoSave.save(gs)
+    Hand.setSortMode(profile and profile.handSortMode or "insertion")
     phase      = "action"
     modal      = nil
     activeBtn  = nil
@@ -304,7 +306,30 @@ local function handleButtonClick(id)
     end
 
     if id == "resolve" then
-        modal = Modals.new("Resolve which anomaly color?", COLOR_ITEMS, function(color)
+        local threshold = Mod.cardsToResolveAnomaly(gs)
+        local colorCounts = {}
+        for _, c in ipairs(gs.hand) do
+            if c.type == "city" then
+                colorCounts[c.color] = (colorCounts[c.color] or 0) + 1
+            end
+        end
+        local items = {}
+        for _, item in ipairs(COLOR_ITEMS) do
+            local count    = colorCounts[item.value] or 0
+            local resolved = gs.resolved[item.value]
+            items[#items+1] = {
+                label    = item.label .. " — " .. count .. "/" .. threshold .. " cards" ..
+                           (resolved and " [RESOLVED]" or ""),
+                value    = item.value,
+                disabled = resolved or count < threshold,
+                tip      = resolved
+                    and "This anomaly is already RESOLVED."
+                    or  (count >= threshold
+                        and count .. " matching cards — ready to RESOLVE"
+                        or  "Need " .. threshold .. " cards (" .. count .. " in hand)"),
+            }
+        end
+        modal = Modals.new("Resolve which anomaly?", items, function(color)
             spendAction(function() return Actions.tryResolve(gs, color) end)
         end)
         return
@@ -930,7 +955,6 @@ function love.mousepressed(sx, sy, button)
     end
 
     if vy >= LAYOUT.mapY and vy < LAYOUT.mapY + LAYOUT.mapH then
-        Map.mousepressed(vx, vy, button)
         if button == 1 then handleMapClick(vx, vy) end
         return
     end
@@ -939,39 +963,39 @@ function love.mousepressed(sx, sy, button)
         local btnId = UIActions.hit(vx, vy, LAYOUT.actY, LAYOUT.actH, gs)
         if btnId then handleButtonClick(btnId); return end
 
-        local cardIdx = Hand.hitCard(vx, vy, gs, LAYOUT.handY)
-        if cardIdx then
-            if selectedCard == cardIdx then
-                local card = gs.hand[cardIdx]
-                if phase == "action" and card.type == "event" then
-                    handleCardPlay(card, cardIdx)
+        local ctrl = gs and Hand.hitControl(vx, vy, LAYOUT.handY, #gs.hand) or nil
+        if ctrl == "scroll_left" then
+            Hand.scrollLeft()
+        elseif ctrl == "scroll_right" then
+            Hand.scrollRight(#gs.hand)
+        elseif ctrl == "sort" then
+            local newMode = Hand.cycleSortMode()
+            local profile = AutoSave.getProfile()
+            if profile then
+                profile.handSortMode = newMode
+                Save.saveProfile(AutoSave.getSlot(), profile)
+            end
+        else
+            local cardIdx = gs and Hand.hitCard(vx, vy, gs, LAYOUT.handY) or nil
+            if cardIdx then
+                if selectedCard == cardIdx then
+                    local card = gs.hand[cardIdx]
+                    if phase == "action" and card.type == "event" then
+                        handleCardPlay(card, cardIdx)
+                    else
+                        selectedCard = nil
+                    end
                 else
-                    selectedCard = nil
+                    selectedCard = cardIdx
                 end
-            else
-                selectedCard = cardIdx
             end
         end
     end
 end
 
-function love.mousemoved(sx, sy, dx, dy)
+function love.mousemoved(sx, sy)
     local vx, vy = toVirtual(sx, sy)
     Tooltip.setMouse(vx, vy)
-    -- Scale delta too
-    local ww, wh = love.graphics.getDimensions()
-    local scale  = math.min(ww/VIRTUAL_W, wh/VIRTUAL_H)
-    Map.mousemoved(vx, vy, dx/scale, dy/scale)
-end
-
-function love.mousereleased(sx, sy, button)
-    Map.mousereleased(button)
-end
-
-function love.wheelmoved(wx, wy)
-    local sx, sy = love.mouse.getPosition()
-    local vx, vy = toVirtual(sx, sy)
-    Map.wheelmoved(vx, vy, wx, wy)
 end
 
 function love.keypressed(key)

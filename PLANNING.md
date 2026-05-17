@@ -431,17 +431,6 @@ Open design threads:
 
 ---
 
-### Phase 15 — Map and hand UX cleanup (medium)
-
-Map zoom is awful — rip it out. Hand needs scrolling + sorting. Modals need richer hover.
-
-- **Remove map zoom/scroll/pan.** Lock the camera to a fixed 2×2 layout sized to the virtual canvas. Files: `src/ui/map.lua` (drop `cam.scale`, scroll handlers, drag logic; keep `getNodeWorld` / `worldToVirtual` but make them identity / static). Drop the `wheelmoved` handler in `main.lua`.
-- **Scroll + sort hand.** Add a horizontal scrollbar (or arrow buttons) when hand > visible width. Add a sort toggle: by color, by period, by type (city/event/flux), or insertion order. Files: `src/ui/hand.lua`, persisted preference on profile (`profile.handSortMode`).
-- **Resolve Anomaly modal — highlight only viable colors.** Compute per-color hand counts and the current `Mod.cardsToResolveAnomaly(state)` threshold; render unavailable colors greyed out and unclickable. Files: `main.lua` (resolve button handler), `src/ui/modals.lua` (item-disabled rendering).
-- **Tooltips inside modals.** Today `Tooltip.suppress()` blocks all tooltips when a modal is open. Replace with a more surgical rule: modal items can `push` their own tooltips during render, and only *non-modal* hit areas get suppressed. Files: `src/ui/tooltip.lua` (add a "modal layer" concept), `src/ui/modals.lua` (push per-item tooltips).
-
----
-
 ### Phase 16 — Status bar readability & instability animation (medium)
 
 Make active game state legible at a glance.
@@ -670,6 +659,15 @@ Implemented all 5 missing locked-role abilities. Also fixed a latent bug where `
 - `src/rules/actions.lua` — added `M.movementOptions(state, destCity, destPeriod)` pure-read helper
 - `tests/actions.spec.lua` — 9 new tests for `movementOptions`
 - `tests/helpers.lua` — added `H.contains()` array search utility; 262 total passing
+
+### Phase 15 — Map and hand UX cleanup ✓ Done
+
+- **Map zoom/scroll/pan removed.** Dropped `cam` struct, all drag/scroll/wheel handlers, and `camToMap`. `worldToVirtual` is now identity (`wx, MAP_Y + wy`). `hitCity` uses direct virtual coords. `love.wheelmoved` and pan handlers removed from `main.lua`. Map is permanently locked to the full 1280×540 2×2 grid.
+- **Hand scroll + sort.** `src/ui/hand.lua` rewritten. Shows up to 10 cards per page; `<` / `>` arrow buttons appear at the edges when hand exceeds 10. Sort mode cycles through `insertion | color | period | type` via a clickable label in the lower-right of the hand strip. Sort mode persisted on `profile.handSortMode`; restored on `startGame`/`resumeGame`. `Hand.hitControl` returns `"scroll_left" | "scroll_right" | "sort"` before `Hand.hitCard` is checked. `getSortedIndices` sorts a copy of hand indices; `hitCard` maps sorted display positions back to original hand indices so selection/play still uses the real index.
+- **Resolve modal viability filter.** Resolve handler now calls `Mod.cardsToResolveAnomaly` and counts per-color city cards in hand. Each color item shows `count/threshold` and is `disabled = true` when already RESOLVED or below threshold. Disabled items render dim and are unclickable in `Modals.click`. Each item includes a `tip` for hover context.
+- **Tooltips inside modals.** `Tooltip.pushModal(x,y,w,h,content)` registers areas in a separate `_modalAreas` list that survives `suppress()`. `render()` checks modal areas first (regardless of suppression), then non-modal areas (only if not suppressed). `Modals.render` calls `Tooltip.pushModal` for each item with a `tip` field. Now `Tooltip.suppress()` in the draw loop blocks map/button/hand tooltips but not modal-item tooltips.
+- `src/ui/map.lua`, `src/ui/hand.lua`, `src/ui/tooltip.lua`, `src/ui/modals.lua`, `main.lua`, `src/persistence/save.lua` — all modified
+- 262 total passing (no new tests — all changes are UI/presentation layer)
 
 ### Cross-cutting / always-on
 - New code ships with Busted tests in `tests/`; `busted` is green before any UI work merges.

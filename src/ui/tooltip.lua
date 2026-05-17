@@ -9,8 +9,9 @@
 
 local M = {}
 
-local _mx, _my   = 0, 0
-local _areas     = {}
+local _mx, _my    = 0, 0
+local _areas      = {}
+local _modalAreas = {}
 local _suppressed = false
 
 function M.setMouse(vx, vy)
@@ -25,6 +26,11 @@ end
 -- Circular hit area (for map nodes). content = string or segment table.
 function M.pushCircle(cx, cy, r, content)
     _areas[#_areas + 1] = {cx=cx, cy=cy, r=r, content=content, circle=true}
+end
+
+-- Modal-layer rectangular hit area — survives suppress() so modals can show tooltips.
+function M.pushModal(x, y, w, h, content)
+    _modalAreas[#_modalAreas + 1] = {x=x, y=y, w=w, h=h, content=content}
 end
 
 local MAX_W = 300
@@ -76,30 +82,37 @@ local function drawContent(content, tx, ty, font, lineH)
     end
 end
 
--- Call before render() to skip tooltip display this frame (e.g. when a modal is open).
+-- Call before render() to suppress non-modal tooltips this frame (e.g. when a modal is open).
+-- Modal-layer areas (pushModal) are NOT suppressed.
 function M.suppress()
     _suppressed = true
 end
 
 function M.render()
-    if _suppressed then
-        _areas     = {}
-        _suppressed = false
-        return
-    end
-    -- Find the first matching area.
+    -- Modal-layer areas take highest priority and bypass suppression.
     local content = nil
-    for _, a in ipairs(_areas) do
-        local hit
-        if a.circle then
-            hit = (_mx - a.cx)^2 + (_my - a.cy)^2 <= a.r^2
-        else
-            hit = _mx >= a.x and _mx <= a.x + a.w
-               and _my >= a.y and _my <= a.y + a.h
+    for _, a in ipairs(_modalAreas) do
+        if _mx >= a.x and _mx <= a.x + a.w and _my >= a.y and _my <= a.y + a.h then
+            content = a.content; break
         end
-        if hit then content = a.content; break end
     end
-    _areas = {}   -- clear for next frame
+    _modalAreas = {}
+
+    -- Non-modal areas: skipped when suppressed or when a modal hit already matched.
+    if not content and not _suppressed then
+        for _, a in ipairs(_areas) do
+            local hit
+            if a.circle then
+                hit = (_mx - a.cx)^2 + (_my - a.cy)^2 <= a.r^2
+            else
+                hit = _mx >= a.x and _mx <= a.x + a.w
+                   and _my >= a.y and _my <= a.y + a.h
+            end
+            if hit then content = a.content; break end
+        end
+    end
+    _areas      = {}
+    _suppressed = false
 
     if not content then return end
 

@@ -71,6 +71,7 @@ function M.newProfile()
         deckSelections    = {},
         challengeModIds   = {},
         selectedDifficulty = "standard",
+        handSortMode      = "insertion",
     }
 end
 

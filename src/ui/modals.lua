@@ -1,5 +1,6 @@
 -- Generic list-picker modal. All love.* calls are inside functions so busted
 -- can require this file without a Love2D runtime.
+local Tooltip = require("src.ui.tooltip")
 local M = {}
 
 local W = 420
@@ -38,10 +39,19 @@ function M.render(modal)
 
     local iy = y + PAD + 28 + PAD
     for _, item in ipairs(modal.items) do
-        love.graphics.setColor(0.28, 0.32, 0.38)
+        if item.disabled then
+            love.graphics.setColor(0.14, 0.16, 0.20)
+        else
+            love.graphics.setColor(0.28, 0.32, 0.38)
+        end
         love.graphics.rectangle("fill", x + PAD, iy, W - PAD*2, ITEM_H - 4, 4)
-        love.graphics.setColor(0.9, 0.9, 0.9)
+        love.graphics.setColor(item.disabled and 0.40 or 0.9,
+                               item.disabled and 0.40 or 0.9,
+                               item.disabled and 0.40 or 0.9)
         love.graphics.print(item.label, x + PAD + 12, iy + 11)
+        if item.tip then
+            Tooltip.pushModal(x + PAD, iy, W - PAD*2, ITEM_H - 4, item.tip)
+        end
         iy = iy + ITEM_H
     end
 
@@ -60,8 +70,10 @@ function M.click(modal, vx, vy)
 
     local iy = y + PAD + 28 + PAD
     for _, item in ipairs(modal.items) do
-        if vx >= x+PAD and vx <= x+W-PAD and vy >= iy and vy <= iy+ITEM_H-4 then
-            return item.value
+        if not item.disabled then
+            if vx >= x+PAD and vx <= x+W-PAD and vy >= iy and vy <= iy+ITEM_H-4 then
+                return item.value
+            end
         end
         iy = iy + ITEM_H
     end
