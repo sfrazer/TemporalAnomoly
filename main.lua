@@ -178,14 +178,14 @@ end
 
 local function commitShop()
     local profile = AutoSave.getProfile()
+    if not profile then return end
     local cost = RunPrep.totalCost(shopState.bonusSelections, shopState.deckSelections)
-    if not profile or cost > profile.rpBalance then
+    if cost > (profile.rpBalance or 0) then
         showMsg("Not enough RP"); return
     end
     profile.bonusSelections = shopState.bonusSelections
     profile.deckSelections  = shopState.deckSelections
     profile.challengeModIds = shopState.challengeModIds
-    profile.rpBalance = profile.rpBalance - cost
     Save.saveProfile(AutoSave.getSlot(), profile)
     startGame(selectedRole)
 end

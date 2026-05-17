@@ -53,6 +53,9 @@ local function bonusRPTotal(shopState)
 end
 
 function M.render(shopState, rpBalance)
+    local cost      = totalCost(shopState)
+    local remaining = (rpBalance or 0) - cost
+
     love.graphics.setColor(0.04, 0.05, 0.08)
     love.graphics.rectangle("fill", 0, 0, VW, VH)
 
@@ -60,10 +63,7 @@ function M.render(shopState, rpBalance)
     love.graphics.printf("Research Lab", 0, 18, VW, "center")
 
     love.graphics.setColor(0.90, 0.82, 0.30)
-    love.graphics.printf("RP: " .. (rpBalance or 0), 0, 18, VW - 20, "right")
-
-    local cost      = totalCost(shopState)
-    local remaining = (rpBalance or 0) - cost
+    love.graphics.printf("Total RP: " .. (rpBalance or 0), 0, 18, VW - 20, "right")
 
     for ci, section in ipairs(SECTIONS) do
         local cx = COL_X[ci]
@@ -139,16 +139,20 @@ function M.render(shopState, rpBalance)
     love.graphics.setColor(0.24, 0.27, 0.36)
     love.graphics.rectangle("fill", 0, fy, VW, 2)
 
-    -- Cost
+    -- RP breakdown
     local affordable = remaining >= 0
-    love.graphics.setColor(affordable and 0.72 or 0.88, affordable and 0.78 or 0.32, affordable and 0.38 or 0.30)
-    love.graphics.printf("Cost: " .. cost .. " RP", 20, fy + 22, 280, "left")
+    love.graphics.setColor(0.60, 0.63, 0.75)
+    love.graphics.printf("Total RP: " .. (rpBalance or 0), 20, fy + 14, 250, "left")
+    love.graphics.setColor(0.88, 0.68, 0.28)
+    love.graphics.printf("Allocated: " .. cost, 20, fy + 36, 250, "left")
+    love.graphics.setColor(affordable and 0.38 or 0.88, affordable and 0.88 or 0.32, affordable and 0.42 or 0.30)
+    love.graphics.printf("Remaining: " .. remaining, 280, fy + 36, 250, "left")
 
-    -- Bonus RP
+    -- Bonus RP from mods
     local bonus = bonusRPTotal(shopState)
     if bonus > 0 then
         love.graphics.setColor(0.90, 0.75, 0.30)
-        love.graphics.printf("+" .. bonus .. " RP/run from mods", 340, fy + 22, 400, "center")
+        love.graphics.printf("+" .. bonus .. " RP/run from mods", 540, fy + 22, 360, "center")
     end
 
     -- Start Run button
