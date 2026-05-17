@@ -554,7 +554,9 @@ Implemented all 5 missing locked-role abilities. Also fixed a latent bug where `
 - `src/rules/roles.lua` — fixed `fn(state)`; implemented all 5 APPLY functions; added adjacency lookup built at module load
 - `src/rules/actions.lua` — `tryBuildOutpost` wraps card requirement in hook check; added `tryRetrieveCard`
 - `src/ui/actions.lua` — `retrieve_card` and `peek_threat` buttons added with role-conditional visibility and tooltips
-- `main.lua` — handlers for both new buttons
+- `main.lua` — handlers for both new buttons; bug fix: `peek_threat` modal was being cleared immediately because `spendAction` → `endAction()` sets `modal = nil`; fixed by building items before `spendAction`, calling it with a no-op, then opening the modal after it returns (only when `phase == "action"`)
+- `src/ui/tooltip.lua` — added `Tooltip.suppress()`: sets a one-frame flag causing `render()` to drop all accumulated hit areas without drawing; fixes tooltips from the map bleeding through open modals
+- `main.lua` — `if modal then Tooltip.suppress() end` added in draw loop before `Tooltip.render()`
 - `tests/roles.spec.lua` — 19 new tests added alongside existing starter-role tests; 252 total passing
 
 ### Cross-cutting / always-on
