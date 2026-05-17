@@ -61,7 +61,8 @@ TemporalAnomaly/
 │   │   ├── roleSelect.lua        -- role grid (locked roles read from profile.roleUnlocks)
 │   │   ├── profileSelect.lua     -- 3-slot profile picker with create/delete
 │   │   ├── metaShop.lua          -- Research Lab: Starting Bonuses, Deck Upgrades, Challenge Mods
-│   │   └── difficultySelect.lua  -- 4-option difficulty picker (Introductory → Legendary)
+│   │   ├── difficultySelect.lua  -- 4-option difficulty picker (Introductory → Legendary)
+│   │   └── gameOver.lua          -- VICTORY/DEFEAT card with Play Again / Return to Shop / Change Role
 │   ├── persistence/
 │   │   ├── save.lua              -- binser serialize/deserialize; newProfile, serializeState
 │   │   └── autosave.lua          -- after-action auto-save; getProfile/getSlot accessors
@@ -475,11 +476,11 @@ Test after each change by running `busted` from the root of the project.
 - Commands: `flux`, `seed <n>`, `addcube`, `clearcube`, `setinstability`, `win`, `lose`, `dump`, `help`.
 - Backtick toggles; console absorbs all keypresses when open; renders last in the draw stack.
 
-### Phase 10A — Win/Lose modal
-Replace the "press R" overlay with a proper clickable end-of-run screen.
-- Styled VICTORY / DEFEAT card: reason text, +RP earned, newly unlocked role names.
-- Three buttons: **Play Again** (same role + difficulty, skip shop), **Return to Shop** (same role, back to shop), **Change Role** (back to role select).
-- Implementation touchpoints: `main.lua` gameover draw block → `src/ui/gameOver.lua`; wire button hits in `love.mousepressed`.
+### Phase 10A — Win/Lose modal ✓
+- `src/ui/gameOver.lua`: styled VICTORY (green) / DEFEAT (red) card with reason text, +RP earned, and newly unlocked role names; `render(gameResult)` and `hit(vx, vy)` → `"play_again"` / `"return_to_shop"` / `"change_role"` / nil.
+- Three buttons: **Play Again** (same role + difficulty, skip shop → `startGame`), **Return to Shop** (same role/difficulty, back to shop with prior selections), **Change Role** (back to role select).
+- R key now returns to role select instead of profile select.
+- Bug fix: `AutoSave.finish()` was nilifying slot and profile, causing the shop to show 0 RP and `commitShop` to silently bail after returning from gameover. Fix: capture slot/profile before `finish()`, then re-init AutoSave so the updated profile stays accessible.
 
 ### Phase 10B — Tooltips
 Hover explanation for every interactive element; no scripted tutorial needed.
