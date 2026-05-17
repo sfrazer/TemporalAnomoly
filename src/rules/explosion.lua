@@ -27,6 +27,7 @@ tryPlaceCubeWithExplosion = function(state, cityId, periodId, color, visited)
             return
         end
         node[color] = node[color] + 1
+        Mod.onCubePlaced(state, {city = cityId, period = periodId, color = color})
     end
 end
 

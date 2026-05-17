@@ -13,6 +13,7 @@ local Flux          = require("src.rules.flux")
 local Explosion     = require("src.rules.explosion")
 local Console       = require("src.debug.console")
 local Tooltip       = require("src.ui.tooltip")
+local Anim          = require("src.ui.anim")
 
 local Map              = require("src.ui.map")
 local Hand             = require("src.ui.hand")
@@ -98,9 +99,11 @@ end
 
 local function advancePhase()
     if phase == "action" then
+        Anim.phaseBanner("Draw Phase", 0)
         phase = "draw"
         Phases.runDrawPhase(gs)
         if gs.lost then endAction(); return end
+        Anim.phaseBanner("Instability Phase", 0.70)
         phase = "instability"
         Phases.runInstabilityPhase(gs)
         if gs.lost then endAction(); return end
@@ -130,6 +133,7 @@ end
 
 local function resumeGame(runData, slot, profile)
     Mod.clear()
+    initAnims()
     gs = runData
     Roles.applyRole(gs, gs.role)
     RunPrep.applyModifiers(RunPrep.prepOpts(profile or Save.newProfile(), gs.role))
@@ -146,6 +150,7 @@ local function startGame(roleId)
     local slot    = AutoSave.getSlot()
     local profile = AutoSave.getProfile()
     Mod.clear()
+    initAnims()
     local opts = RunPrep.prepOpts(profile or Save.newProfile(), roleId)
     gs = GameState.new(opts)
     Roles.applyRole(gs, roleId)
@@ -336,6 +341,29 @@ local function handleMapClick(vx, vy)
 end
 
 -- ---------------------------------------------------------------------------
+-- Animation event hooks (re-registered after every Mod.clear())
+-- ---------------------------------------------------------------------------
+local function initAnims()
+    Mod.register("onCubePlaced", function(state, ctx)
+        local wx, wy = Map.getNodeWorld(ctx.city, ctx.period)
+        if wx then
+            local vx, vy = Map.worldToVirtual(wx, wy)
+            Anim.cubePlaced(vx, vy, ctx.color)
+        end
+    end)
+    Mod.register("onTemporalExplosion", function(state, ctx)
+        local wx, wy = Map.getNodeWorld(ctx.city, ctx.period)
+        if wx then
+            local vx, vy = Map.worldToVirtual(wx, wy)
+            Anim.explosion(vx, vy)
+        end
+    end)
+    Mod.register("onChronologicalFlux", function()
+        Anim.fluxPulse()
+    end)
+end
+
+-- ---------------------------------------------------------------------------
 -- Debug console commands (closures capture gs, phase, endAction, etc.)
 -- ---------------------------------------------------------------------------
 local function initConsole()
@@ -469,6 +497,7 @@ function love.update(dt)
         message.ttl = message.ttl - dt
         if message.ttl <= 0 then message = nil end
     end
+    Anim.update(dt)
     Console.update(dt)
 end
 
@@ -484,6 +513,10 @@ function love.draw()
     love.graphics.push()
     love.graphics.translate(ox, oy)
     love.graphics.scale(scale, scale)
+    local shakeX, shakeY = Anim.getShakeOffset()
+    if shakeX ~= 0 or shakeY ~= 0 then
+        love.graphics.translate(shakeX, shakeY)
+    end
 
     if phase == "profileselect" then
         ProfileSelect.render(profilesCache or {})
@@ -541,6 +574,7 @@ function love.draw()
         love.graphics.printf("Actions: " .. tostring(gs.actionsRemaining), 0, LAYOUT.actY - 20, VIRTUAL_W, "right")
     end
 
+    Anim.render()
     Tooltip.render()
     Console.render()
 

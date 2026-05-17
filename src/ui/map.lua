@@ -62,6 +62,24 @@ local mapH = QUAD_H * 2
 
 function M.setMapHeight(h) mapH = h end
 
+-- World-space position of a city node in a given period quadrant.
+function M.getNodeWorld(cityId, periodId)
+    local p = CITY_POS[cityId]
+    if not p then return nil, nil end
+    for _, q in ipairs(PERIOD_QUADS) do
+        if q.id == periodId then
+            return q.col * QUAD_W + p[1], q.row * QUAD_H + p[2]
+        end
+    end
+    return nil, nil
+end
+
+-- Convert world-space map coordinates to virtual canvas coordinates.
+function M.worldToVirtual(wx, wy)
+    return cam.x + wx * cam.scale,
+           MAP_Y + cam.y + wy * cam.scale
+end
+
 local function camToMap(vx, vy)
     return (vx - cam.x) / cam.scale,
            (vy - MAP_Y - cam.y) / cam.scale
