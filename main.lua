@@ -62,7 +62,7 @@ local finishInstability -- forward declaration; called by update drain loop
 local instabilitySteps = {}
 local instabilityIdx   = 1
 local instabilityTimer = 0
-local instabilityDelay = 2.0
+local instabilityDelay = 5.0
 
 -- ---------------------------------------------------------------------------
 -- Helpers
@@ -150,7 +150,7 @@ local function advancePhase()
         Anim.phaseBanner("Instability Phase", 0.70)
 
         local profile = AutoSave.getProfile()
-        instabilityDelay = (profile and profile.instabilityStepDelay) or 2.0
+        instabilityDelay = (profile and profile.instabilityStepDelay) or 5.0
         local steps = Phases.buildInstabilitySteps(gs)
 
         if #steps == 0 then
