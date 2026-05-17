@@ -1,2 +1,63 @@
--- Phase 5: role definitions
-return {}
+return {
+    {
+        id          = "chronologist",
+        name        = "Chronologist",
+        color       = {0.25, 0.75, 0.35},
+        description = "Clear removes ALL cubes of chosen color in your city.\nAuto-clears REPAIRED cubes on arrival.",
+        unlocked    = true,
+    },
+    {
+        id          = "physicist",
+        name        = "Physicist",
+        color       = {0.30, 0.55, 0.95},
+        description = "RESOLVE Anomaly requires only 4 same-color cards instead of 5.",
+        unlocked    = true,
+    },
+    {
+        id          = "coordinator",
+        name        = "Coordinator",
+        color       = {0.65, 0.30, 0.90},
+        description = "Once per turn: free move to any city with a Temporal Outpost.",
+        unlocked    = true,
+    },
+    {
+        id          = "temporal_isolationist",
+        name        = "Temporal Isolationist",
+        color       = {0.50, 0.50, 0.55},
+        description = "Prevent cube placement in your city and adjacent cities each turn.",
+        unlocked    = false,
+        unlockHint  = "Win at Standard",
+    },
+    {
+        id          = "engineer",
+        name        = "Engineer",
+        color       = {0.50, 0.50, 0.55},
+        description = "Build Temporal Outpost without discarding a card.",
+        unlocked    = false,
+        unlockHint  = "Win at Heroic",
+    },
+    {
+        id          = "researcher",
+        name        = "Researcher",
+        color       = {0.50, 0.50, 0.55},
+        description = "Start with +1 card and a free Stabilizer Cache in deck.",
+        unlocked    = false,
+        unlockHint  = "Win at Heroic",
+    },
+    {
+        id          = "failsafe_designer",
+        name        = "Failsafe Designer",
+        color       = {0.50, 0.50, 0.55},
+        description = "Retrieve 1 event card from player discard once per run.",
+        unlocked    = false,
+        unlockHint  = "Win at Legendary",
+    },
+    {
+        id          = "temporal_analyst",
+        name        = "Temporal Analyst",
+        color       = {0.50, 0.50, 0.55},
+        description = "Spend an action to look at top 2 threat deck cards.",
+        unlocked    = false,
+        unlockHint  = "Win with 0 event cards",
+    },
+}

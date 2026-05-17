@@ -30,9 +30,11 @@ function H.makeState(overrides)
         phase            = "action",
         resolved         = {blue = false, yellow = false, black = false, red = false},
         repaired         = {blue = false, yellow = false, black = false, red = false},
-        difficulty       = "standard",
-        priorityCity     = nil,
-        lost             = nil,
+        difficulty           = "standard",
+        priorityCity         = nil,
+        lost                 = nil,
+        role                 = nil,
+        coordinatorMoveUsed  = false,
     }
     if overrides then
         for k, v in pairs(overrides) do state[k] = v end
