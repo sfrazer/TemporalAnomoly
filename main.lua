@@ -543,6 +543,8 @@ local function initConsole()
         Console.print("addcube <city> <period> <color>")
         Console.print("clearcube <city> <period> <color>")
         Console.print("setinstability <n>           — jump instability index (1-7)")
+        Console.print("showplayerdeck               — list player deck in draw order")
+        Console.print("showthreatdeck               — list threat deck in draw order")
         Console.print("win                          — force a win")
         Console.print("lose                         — force a loss")
         Console.print("dump                         — print key state values")
@@ -601,6 +603,24 @@ local function initConsole()
         if not n then return "Usage: setinstability <n>" end
         gs.instabilityIndex = math.max(1, math.min(7, math.floor(n)))
         return "Instability index → " .. gs.instabilityIndex
+    end)
+
+    Console.register("showplayerdeck", function()
+        if not gs then return "No active game" end
+        Console.print("Player deck (" .. #gs.playerDeck .. " cards, index 1 = top):")
+        for i, c in ipairs(gs.playerDeck) do
+            local detail = c.type == "city" and (c.city .. "/" .. c.period) or (c.type or "?")
+            Console.print(i .. ": " .. (c.name or c.id or "?") .. " [" .. detail .. "]")
+        end
+    end)
+
+    Console.register("showthreatdeck", function()
+        if not gs then return "No active game" end
+        Console.print("Threat deck (" .. #gs.threatDeck .. " cards, index 1 = top):")
+        for i, c in ipairs(gs.threatDeck) do
+            local detail = c.city and (c.city .. "/" .. c.period) or (c.id or "?")
+            Console.print(i .. ": " .. (c.name or c.id or "?") .. " [" .. detail .. "]")
+        end
     end)
 
     Console.register("win", function()

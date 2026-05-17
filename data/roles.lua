@@ -3,7 +3,7 @@ return {
         id          = "chronologist",
         name        = "Chronologist",
         color       = {0.25, 0.75, 0.35},
-        description = "Clear removes ALL cubes of chosen color in your city.\nAuto-clears REPAIRED cubes on arrival.",
+        description = "Clear removes ALL cubes of chosen color in your city.\nAuto-clears RESOLVED cubes on arrival.",
         unlocked    = true,
     },
     {

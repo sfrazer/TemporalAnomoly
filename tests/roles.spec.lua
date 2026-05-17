@@ -80,16 +80,13 @@ describe("Roles", function()
             assert.equal(0, state.cubes["atlanta"]["modern"]["yellow"])
         end)
 
-        it("auto-clears REPAIRED cubes at destination on teleport", function()
+        it("auto-clears RESOLVED cubes at destination on teleport", function()
             local state = H.makeState({
                 currentCity   = "chicago",
                 currentPeriod = "modern",
             })
-            -- Red is repaired and has cubes at atlanta/modern
             state.cubes["atlanta"]["modern"]["red"] = 2
             state.resolved["red"] = true
-            state.repaired["red"] = true
-            -- Give a card to teleport to atlanta/modern
             state.hand = { H.cityCard("atlanta", "modern", "black") }
             Roles.applyRole(state, "chronologist")
             local ok, err = Actions.tryTeleport(state, "atlanta", "modern")
@@ -97,31 +94,44 @@ describe("Roles", function()
             assert.equal(0, state.cubes["atlanta"]["modern"]["red"])
         end)
 
-        it("does not clear cubes of non-repaired colors on arrival", function()
+        it("does not clear cubes of non-resolved colors on arrival", function()
             local state = H.makeState({
                 currentCity   = "chicago",
                 currentPeriod = "modern",
             })
             state.cubes["atlanta"]["modern"]["blue"] = 2
-            -- Blue is not repaired
+            -- Blue is not resolved
             state.hand = { H.cityCard("atlanta", "modern", "black") }
             Roles.applyRole(state, "chronologist")
             Actions.tryTeleport(state, "atlanta", "modern")
             assert.equal(2, state.cubes["atlanta"]["modern"]["blue"])
         end)
 
-        it("auto-clears REPAIRED cubes on travel", function()
+        it("auto-clears RESOLVED cubes on travel", function()
             local state = H.makeState({
                 currentCity   = "chicago",
                 currentPeriod = "modern",
             })
             state.cubes["new_york"]["modern"]["black"] = 1
             state.resolved["black"] = true
-            state.repaired["black"] = true
             Roles.applyRole(state, "chronologist")
             local ok = Actions.tryTravel(state, "new_york", "modern")
             assert.is_true(ok)
             assert.equal(0, state.cubes["new_york"]["modern"]["black"])
+        end)
+
+        it("advances anomaly to REPAIRED after clearing last cube on arrival", function()
+            local state = H.makeState({
+                currentCity   = "chicago",
+                currentPeriod = "modern",
+            })
+            -- black is resolved with exactly 1 cube left on the whole board
+            state.cubes["new_york"]["modern"]["black"] = 1
+            state.resolved["black"] = true
+            Roles.applyRole(state, "chronologist")
+            Actions.tryTravel(state, "new_york", "modern")
+            assert.equal(0, state.cubes["new_york"]["modern"]["black"])
+            assert.is_true(state.repaired["black"])
         end)
     end)
 
