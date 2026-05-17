@@ -8,14 +8,17 @@ local RunPrep       = require("src.rules.runPrep")
 local Save          = require("src.persistence.save")
 local AutoSave      = require("src.persistence.autosave")
 
-local Map           = require("src.ui.map")
-local Hand          = require("src.ui.hand")
-local UIActions     = require("src.ui.actions")
-local Footer        = require("src.ui.footer")
-local Modals        = require("src.ui.modals")
-local RoleSelect    = require("src.ui.roleSelect")
-local ProfileSelect = require("src.ui.profileSelect")
-local MetaShop      = require("src.ui.metaShop")
+local Unlocks       = require("src.rules.unlocks")
+
+local Map              = require("src.ui.map")
+local Hand             = require("src.ui.hand")
+local UIActions        = require("src.ui.actions")
+local Footer           = require("src.ui.footer")
+local Modals           = require("src.ui.modals")
+local RoleSelect       = require("src.ui.roleSelect")
+local ProfileSelect    = require("src.ui.profileSelect")
+local MetaShop         = require("src.ui.metaShop")
+local DifficultySelect = require("src.ui.difficultySelect")
 
 -- ---------------------------------------------------------------------------
 -- Layout (virtual 1280×720)
@@ -33,16 +36,17 @@ local LAYOUT = {
 -- ---------------------------------------------------------------------------
 -- Game state
 -- ---------------------------------------------------------------------------
-local gs            -- GameState table
-local modal         -- active Modals.new() table, or nil
-local activeBtn     -- currently highlighted action button id
-local selectedCard  -- index into gs.hand, or nil
-local message       -- {text, ttl} for brief feedback messages
-local phase         -- "profileselect"|"setup"|"shop"|"action"|"gameover"
-local gameResult    -- "won" | "lost" + reason
-local profilesCache -- [slot] = profile_table_or_nil, used by profileselect
-local selectedRole  -- role id chosen on role-select screen, held until shop commits
-local shopState     -- pending shop selections {bonusSelections, deckSelections, challengeModIds}
+local gs                -- GameState table
+local modal             -- active Modals.new() table, or nil
+local activeBtn         -- currently highlighted action button id
+local selectedCard      -- index into gs.hand, or nil
+local message           -- {text, ttl} for brief feedback messages
+local phase             -- "profileselect"|"setup"|"difficulty"|"shop"|"action"|"gameover"
+local gameResult        -- {result, reason, earnedRP, newUnlocks}
+local profilesCache     -- [slot] = profile_table_or_nil, used by profileselect
+local selectedRole      -- role id chosen on role-select screen, held until shop commits
+local selectedDifficulty -- difficulty id chosen before shop, held until commitShop
+local shopState         -- pending shop selections {bonusSelections, deckSelections, challengeModIds}
 
 -- ---------------------------------------------------------------------------
 -- Helpers
@@ -67,11 +71,16 @@ local function endAction()
         phase = "gameover"
         local earnedRP = RunPrep.computeRP(gs, gs.challengeModIds or {})
         local profile  = AutoSave.getProfile()
+        local newUnlocks = {}
         if profile then
             profile.rpBalance = (profile.rpBalance or 0) + earnedRP
+            if result == "won" then
+                newUnlocks = Unlocks.evaluateUnlocks(gs, profile)
+                Unlocks.applyUnlocks(profile, newUnlocks)
+            end
             Save.saveProfile(AutoSave.getSlot(), profile)
         end
-        gameResult = {result = result, reason = reason, earnedRP = earnedRP}
+        gameResult = {result = result, reason = reason, earnedRP = earnedRP, newUnlocks = newUnlocks}
         AutoSave.finish()
     else
         AutoSave.save(gs)
@@ -129,7 +138,6 @@ local function startGame(roleId)
     local profile = AutoSave.getProfile()
     Mod.clear()
     local opts = RunPrep.prepOpts(profile or Save.newProfile(), roleId)
-    opts.difficulty = opts.difficulty or "standard"
     gs = GameState.new(opts)
     Roles.applyRole(gs, roleId)
     RunPrep.applyModifiers(opts)
@@ -145,9 +153,18 @@ local function startGame(roleId)
     Map.setMapHeight(LAYOUT.mapH)
 end
 
-local function enterShop(roleId)
+local function enterDifficulty(roleId)
     selectedRole = roleId
+    phase = "difficulty"
+end
+
+local function enterShop(difficulty)
+    selectedDifficulty = difficulty
     local profile = AutoSave.getProfile()
+    if profile then
+        profile.selectedDifficulty = difficulty
+        Save.saveProfile(AutoSave.getSlot(), profile)
+    end
     shopState = {bonusSelections = {}, deckSelections = {}, challengeModIds = {}}
     if profile then
         for k, v in pairs(profile.bonusSelections or {}) do shopState.bonusSelections[k] = v end
@@ -356,7 +373,13 @@ function love.draw()
     end
 
     if phase == "setup" then
-        RoleSelect.render()
+        RoleSelect.render(AutoSave.getProfile())
+        love.graphics.pop()
+        return
+    end
+
+    if phase == "difficulty" then
+        DifficultySelect.render()
         love.graphics.pop()
         return
     end
@@ -364,6 +387,9 @@ function love.draw()
     if phase == "shop" then
         local profile = AutoSave.getProfile()
         MetaShop.render(shopState, profile and profile.rpBalance or 0)
+        local diffLabel = (selectedDifficulty or "standard"):gsub("^%l", string.upper)
+        love.graphics.setColor(0.60, 0.62, 0.72)
+        love.graphics.printf("Difficulty: " .. diffLabel, 0, 42, VIRTUAL_W, "center")
         love.graphics.pop()
         return
     end
@@ -398,8 +424,13 @@ function love.draw()
             love.graphics.setColor(0.90, 0.82, 0.30)
             love.graphics.printf("+" .. gameResult.earnedRP .. " RP earned", 0, 356, VIRTUAL_W, "center")
         end
+        if gameResult.newUnlocks and #gameResult.newUnlocks > 0 then
+            love.graphics.setColor(0.60, 0.90, 0.65)
+            love.graphics.printf("Unlocked: " .. table.concat(gameResult.newUnlocks, ", "),
+                                 0, 386, VIRTUAL_W, "center")
+        end
         love.graphics.setColor(0.6, 0.6, 0.65)
-        love.graphics.printf("Press R to restart", 0, 396, VIRTUAL_W, "center")
+        love.graphics.printf("Press R to restart", 0, 416, VIRTUAL_W, "center")
     end
 
     -- Actions remaining indicator
@@ -433,8 +464,17 @@ function love.mousepressed(sx, sy, button)
     -- Role selection screen
     if phase == "setup" then
         if button == 1 then
-            local roleId = RoleSelect.hit(vx, vy)
-            if roleId then enterShop(roleId) end
+            local roleId = RoleSelect.hit(vx, vy, AutoSave.getProfile())
+            if roleId then enterDifficulty(roleId) end
+        end
+        return
+    end
+
+    -- Difficulty selection screen
+    if phase == "difficulty" then
+        if button == 1 then
+            local difficulty = DifficultySelect.hit(vx, vy)
+            if difficulty then enterShop(difficulty) end
         end
         return
     end

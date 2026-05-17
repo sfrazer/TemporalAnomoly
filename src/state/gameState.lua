@@ -137,6 +137,7 @@ function M.new(opts)
         challengeModIds       = challengeModIds,
         teleportBannedTurns   = 0,
         volatileAnomalyActive = false,
+        hadDeckUpgrades       = #extraDeckCards > 0,
     }
 
     if startingOutpost then

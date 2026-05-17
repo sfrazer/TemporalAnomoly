@@ -61,6 +61,7 @@ function M.prepOpts(profile, roleId)
 
     return {
         role             = roleId,
+        difficulty       = profile.selectedDifficulty or "standard",
         handSize         = 4 + (bs.extra_starting_card or 0),
         startingOutpost  = (bs.starting_outpost or 0) > 0,
         skipSeedingCount = (bs.light_incidents  or 0) > 0 and 2 or 0,
