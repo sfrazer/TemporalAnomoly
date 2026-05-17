@@ -105,6 +105,11 @@ function M.onTemporalExplosion(state, ctx)
     fire("onTemporalExplosion", state, ctx)
 end
 
+-- ctx = {city, period, color} — fired after a single cube is successfully placed.
+function M.onCubePlaced(state, ctx)
+    fire("onCubePlaced", state, ctx)
+end
+
 function M.onArrive(state, ctx)
     fire("onArrive", state, ctx)
 end
