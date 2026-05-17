@@ -140,6 +140,7 @@ function M.new(opts)
         hadDeckUpgrades       = #extraDeckCards > 0,
         skipNextInstability   = false,
         sealedCity            = nil,
+        failsafeDesignerUsed  = false,
     }
 
     if startingOutpost then

@@ -108,13 +108,15 @@ function M.tryBuildOutpost(state)
     if not Mod.canBuildOutpost(state, state.currentCity) then
         return false, "building blocked"
     end
-    local removed = takeFromHand(state.hand, function(c)
-        return c.type == "city" and c.city == state.currentCity
-    end)
-    if not removed then
-        return false, "no card for " .. state.currentCity .. " in hand"
+    if Mod.outpostCardRequired(state) then
+        local removed = takeFromHand(state.hand, function(c)
+            return c.type == "city" and c.city == state.currentCity
+        end)
+        if not removed then
+            return false, "no card for " .. state.currentCity .. " in hand"
+        end
+        state.playerDiscard[#state.playerDiscard + 1] = removed[1]
     end
-    state.playerDiscard[#state.playerDiscard + 1] = removed[1]
     state.outposts[state.currentCity] = true
     return true
 end
@@ -267,6 +269,20 @@ function M.tryPlayCard(state, cardIdx, arg1, arg2)
 
     if ok then discardCard(state, cardIdx, card) end
     return ok, err
+end
+
+function M.tryRetrieveCard(state, discardIdx)
+    if state.failsafeDesignerUsed then
+        return false, "Retrieve Card already used this run"
+    end
+    local card = state.playerDiscard[discardIdx]
+    if not card or card.type ~= "event" then
+        return false, "not a valid event card"
+    end
+    table.remove(state.playerDiscard, discardIdx)
+    state.hand[#state.hand + 1] = card
+    state.failsafeDesignerUsed = true
+    return true
 end
 
 function M.tryCoordinatorMove(state, destCity)

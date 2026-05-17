@@ -1,7 +1,17 @@
-local Mod  = require("src.state.modifiers")
-local util = require("src.util")
+local Mod    = require("src.state.modifiers")
+local util   = require("src.util")
+local cities = require("data.cities")
 
 local M = {}
+
+-- Adjacency lookup built once at module load: adjacentTo[cityId][neighborId] = true
+local adjacentTo = {}
+for _, city in ipairs(cities) do
+    adjacentTo[city.id] = {}
+    for _, nid in ipairs(city.adjacent) do
+        adjacentTo[city.id][nid] = true
+    end
+end
 
 local APPLY = {}
 
@@ -32,9 +42,45 @@ APPLY.coordinator = function()
     -- Free move handled via state.coordinatorMoveUsed; no modifier hooks needed
 end
 
+APPLY.temporal_isolationist = function(state)
+    Mod.register("canPlaceCube", function(s, city, period, color)
+        if city == s.currentCity then return false end
+        if adjacentTo[s.currentCity] and adjacentTo[s.currentCity][city] then return false end
+    end)
+end
+
+APPLY.engineer = function(state)
+    Mod.register("outpostCardRequired", function(s, value)
+        return false
+    end)
+end
+
+APPLY.researcher = function(state)
+    -- +1 card drawn into hand from deck
+    local card = util.drawTop(state.playerDeck)
+    if card then state.hand[#state.hand + 1] = card end
+    -- Insert a free Chronological Rewind at a random deck position
+    local rewind = {
+        type        = "event",
+        id          = "chronological_rewind",
+        name        = "Chronological Rewind",
+        description = "Clear all cubes of 1 color across all periods of current city",
+    }
+    local pos = math.random(#state.playerDeck + 1)
+    table.insert(state.playerDeck, pos, rewind)
+end
+
+APPLY.failsafe_designer = function(state)
+    -- Ability is UI-triggered (Retrieve Card button); no passive modifiers
+end
+
+APPLY.temporal_analyst = function(state)
+    -- Ability is UI-triggered (Peek Threat button); no passive modifiers
+end
+
 function M.applyRole(state, roleId)
     local fn = APPLY[roleId]
-    if fn then fn() end
+    if fn then fn(state) end
 end
 
 return M
