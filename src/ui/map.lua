@@ -1,6 +1,7 @@
 local unpack  = table.unpack or unpack  -- LuaJIT (Love2D) vs Lua 5.2+
 local cities  = require("data.cities")
 local periods = require("data.periods")
+local Tooltip = require("src.ui.tooltip")
 
 local M = {}
 
@@ -142,6 +143,29 @@ local function drawCity(state, cityId, periodId, qx, qy, pc, isPlayer)
                 cs, cs, 1)
         end
     end
+
+    -- Tooltip: build in virtual space (undo camera transform)
+    local vcx = cam.x + x * cam.scale
+    local vcy = MAP_Y + cam.y + y * cam.scale
+    local vr  = (NODE_R + 8) * cam.scale
+    local tipLines = {cityById[cityId].name .. " — " .. (PERIOD_NAME[periodId] or periodId)}
+    local cubeStrs = {}
+    for _, color in ipairs({"blue","yellow","black","red"}) do
+        local n = cubes[color] or 0
+        if n > 0 then
+            cubeStrs[#cubeStrs+1] = n .. " " .. color
+        end
+    end
+    if #cubeStrs > 0 then
+        tipLines[#tipLines+1] = "Cubes: " .. table.concat(cubeStrs, "  ")
+    else
+        tipLines[#tipLines+1] = "No incident cubes"
+    end
+    if state.outposts[cityId] then tipLines[#tipLines+1] = "Temporal Outpost ★" end
+    if state.priorityCity and cityId == state.priorityCity then
+        tipLines[#tipLines+1] = "⚠ Priority City — explosion here = instant loss"
+    end
+    Tooltip.pushCircle(vcx, vcy, vr, table.concat(tipLines, "\n"))
 end
 
 local function drawPeriod(state, periodId, col, row)

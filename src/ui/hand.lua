@@ -1,3 +1,5 @@
+local Tooltip = require("src.ui.tooltip")
+
 local M = {}
 
 local CARD_W = 100
@@ -69,6 +71,17 @@ function M.render(state, handY, selected)
             love.graphics.setColor(1, 0.6, 0.2)
             love.graphics.printf("Flux", x+5, handY+24, CARD_W-10, "center")
         end
+
+        -- Tooltip
+        local tip
+        if card.type == "city" then
+            tip = card.name .. "\nDiscard to Teleport here, or to Build an Outpost in " .. card.name:match("^([^%(]+)"):gsub("%s+$", "") .. "."
+        elseif card.type == "event" then
+            tip = card.name .. "\n" .. (card.description or "")
+        elseif card.type == "flux" then
+            tip = "Chronological Flux\nResolves immediately when drawn: advance Instability Level, place 3 cubes on the bottom threat card, reshuffle discards onto the deck."
+        end
+        if tip then Tooltip.push(x, handY, CARD_W, CARD_H, tip) end
     end
 end
 
