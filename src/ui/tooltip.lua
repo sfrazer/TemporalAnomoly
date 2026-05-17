@@ -9,8 +9,9 @@
 
 local M = {}
 
-local _mx, _my = 0, 0
-local _areas   = {}
+local _mx, _my   = 0, 0
+local _areas     = {}
+local _suppressed = false
 
 function M.setMouse(vx, vy)
     _mx, _my = vx, vy
@@ -75,7 +76,17 @@ local function drawContent(content, tx, ty, font, lineH)
     end
 end
 
+-- Call before render() to skip tooltip display this frame (e.g. when a modal is open).
+function M.suppress()
+    _suppressed = true
+end
+
 function M.render()
+    if _suppressed then
+        _areas     = {}
+        _suppressed = false
+        return
+    end
     -- Find the first matching area.
     local content = nil
     for _, a in ipairs(_areas) do

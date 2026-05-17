@@ -743,6 +743,7 @@ function love.draw()
     end
 
     Anim.render()
+    if modal then Tooltip.suppress() end
     Tooltip.render()
     Console.render()
 
