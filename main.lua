@@ -74,6 +74,7 @@ local function endAction()
     if result then
         phase = "gameover"
         local earnedRP = RunPrep.computeRP(gs, gs.challengeModIds or {})
+        local slot     = AutoSave.getSlot()
         local profile  = AutoSave.getProfile()
         local newUnlocks = {}
         if profile then
@@ -82,10 +83,13 @@ local function endAction()
                 newUnlocks = Unlocks.evaluateUnlocks(gs, profile)
                 Unlocks.applyUnlocks(profile, newUnlocks)
             end
-            Save.saveProfile(AutoSave.getSlot(), profile)
+            Save.saveProfile(slot, profile)
         end
         gameResult = {result = result, reason = reason, earnedRP = earnedRP, newUnlocks = newUnlocks}
         AutoSave.finish()
+        -- Re-init so the profile (now with updated RP and no activeRun) stays
+        -- accessible for Return to Shop / Play Again flows.
+        if slot and profile then AutoSave.init(slot, profile) end
     else
         AutoSave.save(gs)
     end
