@@ -70,4 +70,12 @@ function H.threatCard(cityId, periodId, color)
             name = cityId .. "/" .. periodId}
 end
 
+-- Returns true if value is in a plain array table.
+function H.contains(t, value)
+    for _, v in ipairs(t) do
+        if v == value then return true end
+    end
+    return false
+end
+
 return H

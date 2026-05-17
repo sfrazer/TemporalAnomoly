@@ -285,6 +285,48 @@ function M.tryRetrieveCard(state, discardIdx)
     return true
 end
 
+-- Pure read: returns a list of movement verbs available for reaching (destCity, destPeriod).
+-- Subset of {"travel", "teleport", "teleport_alt"}. Does not mutate state.
+function M.movementOptions(state, destCity, destPeriod)
+    if destCity == state.currentCity and destPeriod == state.currentPeriod then
+        return {}
+    end
+    local banned = (state.teleportBannedTurns or 0) > 0
+    local opts   = {}
+
+    -- Travel: adjacent same-period, or same-city cross-period via Outpost
+    if Mod.canTravel(state, {city = state.currentCity, period = state.currentPeriod},
+                            {city = destCity,          period = destPeriod}) then
+        if destCity == state.currentCity then
+            if state.outposts[state.currentCity] then opts[#opts+1] = "travel" end
+        elseif destPeriod == state.currentPeriod then
+            local c = cityById[state.currentCity]
+            if c then
+                for _, nid in ipairs(c.adjacent) do
+                    if nid == destCity then opts[#opts+1] = "travel"; break end
+                end
+            end
+        end
+    end
+
+    if not banned then
+        -- Teleport: card in hand matching destination
+        for _, c in ipairs(state.hand) do
+            if c.type == "city" and c.city == destCity and c.period == destPeriod then
+                opts[#opts+1] = "teleport"; break
+            end
+        end
+        -- Teleport Alt: card in hand matching current location
+        for _, c in ipairs(state.hand) do
+            if c.type == "city" and c.city == state.currentCity and c.period == state.currentPeriod then
+                opts[#opts+1] = "teleport_alt"; break
+            end
+        end
+    end
+
+    return opts
+end
+
 function M.tryCoordinatorMove(state, destCity)
     if state.role ~= "coordinator" then
         return false, "not the Coordinator role"

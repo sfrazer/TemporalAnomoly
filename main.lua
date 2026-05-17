@@ -253,7 +253,8 @@ local function spendAction(fn)
     local ok, err = fn()
     if ok then
         gs.actionsRemaining = gs.actionsRemaining - 1
-        if gs.actionsRemaining <= 0 then advancePhase() end
+        -- Phase does NOT auto-advance at 0 actions; player must click End Turn.
+        -- This lets event cards be played after the last action is spent.
         endAction()
     else
         showMsg(err or "Action failed")
@@ -268,6 +269,14 @@ local function handleButtonClick(id)
 
     if id == "end_turn" then
         advancePhase()
+        return
+    end
+
+    -- Guard action-costing buttons when out of actions.
+    local costsAction = (id == "build" or id == "clear" or id == "resolve" or id == "peek_threat")
+    if costsAction and gs.actionsRemaining <= 0 then
+        showMsg("No actions remaining — click End Turn")
+        activeBtn = nil
         return
     end
 
@@ -301,28 +310,8 @@ local function handleButtonClick(id)
         return
     end
 
-    if id == "travel" then
-        showMsg("Click a city node to travel there")
-        -- activeBtn stays set; map click will resolve
-        return
-    end
-
-    if id == "teleport" then
-        showMsg("Click a city node to teleport (uses matching card from hand)")
-        return
-    end
-
     if id == "coordinator_move" then
         showMsg("Click a city with a Temporal Outpost to move there for free")
-        return
-    end
-
-    if id == "teleport_alt" then
-        modal = Modals.new("Discard current-city card and go where?", cityItems, function(destCity)
-            modal = Modals.new("Which time period?", PERIOD_ITEMS, function(destPeriod)
-                spendAction(function() return Actions.tryTeleportAlt(gs, destCity, destPeriod) end)
-            end)
-        end)
         return
     end
 
@@ -373,21 +362,83 @@ local function handleButtonClick(id)
 end
 
 local function handleMapClick(vx, vy)
+    if phase ~= "action" then return end
     local hit = Map.hitCity(vx, vy)
     if not hit then return end
 
-    if activeBtn == "travel" then
-        spendAction(function() return Actions.tryTravel(gs, hit.city, hit.period) end)
-    elseif activeBtn == "teleport" then
-        spendAction(function() return Actions.tryTeleport(gs, hit.city, hit.period) end)
-    elseif activeBtn == "coordinator_move" then
+    -- Coordinator button flow: button sets activeBtn, then player clicks destination.
+    if activeBtn == "coordinator_move" then
         local ok, err = Actions.tryCoordinatorMove(gs, hit.city)
-        if ok then
-            endAction()
-        else
-            showMsg(err or "Cannot move there")
-            activeBtn = nil
+        if ok then endAction() else showMsg(err or "Cannot move there"); activeBtn = nil end
+        return
+    end
+
+    -- Unified click-to-move: determine every legal way to reach this node.
+    local destCity, destPeriod = hit.city, hit.period
+
+    -- Coordinator free move available to this destination?
+    local coordAvail = gs.role == "coordinator"
+        and not gs.coordinatorMoveUsed
+        and gs.outposts[destCity]
+        and destCity ~= gs.currentCity
+
+    -- Standard movement options (only if actions remain).
+    local moveOpts = gs.actionsRemaining > 0
+        and Actions.movementOptions(gs, destCity, destPeriod)
+        or {}
+
+    -- Build the items list shown in the picker modal.
+    local items = {}
+    if coordAvail then
+        items[#items+1] = {label = "Coordinator Move (free)", value = "coordinator_move"}
+    end
+    for _, o in ipairs(moveOpts) do
+        if o == "travel" then
+            items[#items+1] = {label = "Travel (1 action)", value = "travel"}
+        elseif o == "teleport" then
+            items[#items+1] = {
+                label = "Teleport — discard " .. destCity .. "/" .. destPeriod .. " (1 action)",
+                value = "teleport",
+            }
+        elseif o == "teleport_alt" then
+            items[#items+1] = {
+                label = "Teleport Alt — discard " .. gs.currentCity .. "/" .. gs.currentPeriod .. " (1 action)",
+                value = "teleport_alt",
+            }
         end
+    end
+
+    if #items == 0 then
+        if gs.actionsRemaining <= 0 and not coordAvail then
+            showMsg("No actions left")
+        else
+            showMsg("No valid move to " .. destCity .. " / " .. destPeriod)
+        end
+        return
+    end
+
+    local function execute(choice)
+        if choice == "travel" then
+            spendAction(function() return Actions.tryTravel(gs, destCity, destPeriod) end)
+        elseif choice == "teleport" then
+            spendAction(function() return Actions.tryTeleport(gs, destCity, destPeriod) end)
+        elseif choice == "teleport_alt" then
+            spendAction(function() return Actions.tryTeleportAlt(gs, destCity, destPeriod) end)
+        elseif choice == "coordinator_move" then
+            local ok, err = Actions.tryCoordinatorMove(gs, destCity)
+            if ok then endAction() else showMsg(err or "Cannot move there") end
+        end
+    end
+
+    -- Travel is unambiguous — execute immediately without a modal.
+    for _, o in ipairs(moveOpts) do
+        if o == "travel" then execute("travel"); return end
+    end
+
+    if #items == 1 then
+        execute(items[1].value)
+    else
+        modal = Modals.new("Move to " .. destCity .. "?", items, execute)
     end
 end
 

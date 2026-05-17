@@ -3,9 +3,6 @@ local Tooltip = require("src.ui.tooltip")
 local M = {}
 
 local BUTTON_TIP = {
-    travel           = "Move to an adjacent city in the same time period, or cross periods via a Temporal Outpost.",
-    teleport         = "Discard a (city, period) card to move instantly to that location.",
-    teleport_alt     = "Discard a card matching your current location to teleport to any city in any period.",
     build            = "Discard a card matching your current city to place Temporal Outposts in all 4 periods of that city.",
     clear            = "Remove 1 incident cube. Removes ALL cubes of that color if the anomaly is already RESOLVED.",
     resolve          = "At a Temporal Outpost: discard 5 same-color cards to RESOLVE that anomaly.",
@@ -16,14 +13,14 @@ local BUTTON_TIP = {
 }
 
 local BASE_BUTTONS = {
-    {id = "travel",      label = "Travel"},
-    {id = "teleport",    label = "Teleport"},
-    {id = "teleport_alt",label = "Teleport Alt"},
-    {id = "build",       label = "Build Outpost"},
-    {id = "clear",       label = "Clear Incident"},
-    {id = "resolve",     label = "Resolve Anomaly"},
-    {id = "end_turn",    label = "End Turn"},
+    {id = "build",    label = "Build Outpost"},
+    {id = "clear",    label = "Clear Incident"},
+    {id = "resolve",  label = "Resolve Anomaly"},
+    {id = "end_turn", label = "End Turn"},
 }
+
+-- Buttons that cost an action; visually dimmed when actionsRemaining == 0.
+local COSTS_ACTION = {build = true, clear = true, resolve = true, peek_threat = true}
 
 local BTN_H   = 38
 local BTN_PAD = 10
@@ -62,11 +59,14 @@ function M.render(actY, actH, activeId, gs)
     local y      = actY + ROW_PAD
 
     for i, btn in ipairs(buttons) do
-        local x      = BTN_PAD + (i - 1) * (btnW + BTN_PAD)
-        local active = (btn.id == activeId)
+        local x        = BTN_PAD + (i - 1) * (btnW + BTN_PAD)
+        local active   = (btn.id == activeId)
+        local disabled = COSTS_ACTION[btn.id] and gs and (gs.actionsRemaining or 1) <= 0
 
         -- Button fill
-        if active then
+        if disabled then
+            love.graphics.setColor(0.12, 0.13, 0.16, 0.55)
+        elseif active then
             love.graphics.setColor(0.22, 0.50, 0.80)
         elseif btn.id == "end_turn" then
             love.graphics.setColor(0.22, 0.45, 0.22)
@@ -82,13 +82,17 @@ function M.render(actY, actH, activeId, gs)
         love.graphics.rectangle("fill", x, y, btnW, BTN_H, 4)
 
         -- Border
-        love.graphics.setColor(active and 0.55 or 0.35, active and 0.75 or 0.40,
-                                active and 1.0  or 0.50, 0.8)
+        if disabled then
+            love.graphics.setColor(0.22, 0.24, 0.30, 0.45)
+        else
+            love.graphics.setColor(active and 0.55 or 0.35, active and 0.75 or 0.40,
+                                    active and 1.0  or 0.50, 0.8)
+        end
         love.graphics.setLineWidth(1)
         love.graphics.rectangle("line", x, y, btnW, BTN_H, 4)
 
         -- Label
-        love.graphics.setColor(1, 1, 1, active and 1 or 0.85)
+        love.graphics.setColor(1, 1, 1, disabled and 0.35 or (active and 1 or 0.85))
         local font = love.graphics.getFont()
         local tw   = font:getWidth(btn.label)
         love.graphics.print(btn.label, x + (btnW - tw)/2, y + (BTN_H - font:getHeight())/2)

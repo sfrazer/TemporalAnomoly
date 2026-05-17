@@ -221,4 +221,71 @@ describe("src.rules.actions", function()
             assert.is_false(state.repaired["black"])
         end)
     end)
+
+    -- -----------------------------------------------------------------------
+    describe("movementOptions", function()
+        local Mod = require("src.state.modifiers")
+        before_each(function() Mod.clear() end)
+
+        it("returns empty when already at destination", function()
+            local opts = actions.movementOptions(state, "atlanta", "modern")
+            assert.same({}, opts)
+        end)
+
+        it("includes travel for an adjacent same-period city", function()
+            -- atlanta is adjacent to houston
+            local opts = actions.movementOptions(state, "houston", "modern")
+            assert.is_truthy(require("tests.helpers").contains(opts, "travel"))
+        end)
+
+        it("does not include travel for a non-adjacent city", function()
+            local opts = actions.movementOptions(state, "seattle", "modern")
+            assert.is_falsy(require("tests.helpers").contains(opts, "travel"))
+        end)
+
+        it("includes travel cross-period when outpost exists", function()
+            state.outposts["atlanta"] = true
+            local opts = actions.movementOptions(state, "atlanta", "prehistory")
+            assert.is_truthy(require("tests.helpers").contains(opts, "travel"))
+        end)
+
+        it("does not include cross-period travel without outpost", function()
+            local opts = actions.movementOptions(state, "atlanta", "prehistory")
+            assert.is_falsy(require("tests.helpers").contains(opts, "travel"))
+        end)
+
+        it("includes teleport when matching destination card is in hand", function()
+            state.hand = {H.cityCard("houston", "modern", "black")}
+            local opts = actions.movementOptions(state, "houston", "modern")
+            assert.is_truthy(H.contains(opts, "teleport"))
+        end)
+
+        it("includes teleport_alt when matching source card is in hand", function()
+            state.hand = {H.cityCard("atlanta", "modern", "black")}
+            local opts = actions.movementOptions(state, "seattle", "prehistory")
+            assert.is_truthy(H.contains(opts, "teleport_alt"))
+        end)
+
+        it("excludes teleport and teleport_alt when teleport is banned", function()
+            state.teleportBannedTurns = 1
+            state.hand = {H.cityCard("houston", "modern", "black"),
+                          H.cityCard("atlanta", "modern", "black")}
+            local opts = actions.movementOptions(state, "houston", "modern")
+            assert.is_falsy(H.contains(opts, "teleport"))
+            assert.is_falsy(H.contains(opts, "teleport_alt"))
+        end)
+
+        it("can return all three options simultaneously", function()
+            -- adjacent + has dest card + has source card
+            state.outposts["atlanta"] = false
+            state.hand = {
+                H.cityCard("houston", "modern", "black"),
+                H.cityCard("atlanta", "modern", "black"),
+            }
+            local opts = actions.movementOptions(state, "houston", "modern")
+            assert.is_truthy(H.contains(opts, "travel"))
+            assert.is_truthy(H.contains(opts, "teleport"))
+            assert.is_truthy(H.contains(opts, "teleport_alt"))
+        end)
+    end)
 end)
