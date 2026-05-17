@@ -9,6 +9,9 @@ local Save          = require("src.persistence.save")
 local AutoSave      = require("src.persistence.autosave")
 
 local Unlocks       = require("src.rules.unlocks")
+local Flux          = require("src.rules.flux")
+local Explosion     = require("src.rules.explosion")
+local Console       = require("src.debug.console")
 
 local Map              = require("src.ui.map")
 local Hand             = require("src.ui.hand")
@@ -327,11 +330,120 @@ local function handleMapClick(vx, vy)
 end
 
 -- ---------------------------------------------------------------------------
+-- Debug console commands (closures capture gs, phase, endAction, etc.)
+-- ---------------------------------------------------------------------------
+local function initConsole()
+    local util = require("src.util")
+
+    Console.register("help", function()
+        Console.print("flux                         — force a Chronological Flux")
+        Console.print("seed <n>                     — run instability phase n times")
+        Console.print("addcube <city> <period> <color>")
+        Console.print("clearcube <city> <period> <color>")
+        Console.print("setinstability <n>           — jump instability index (1-7)")
+        Console.print("win                          — force a win")
+        Console.print("lose                         — force a loss")
+        Console.print("dump                         — print key state values")
+    end)
+
+    Console.register("flux", function()
+        if not gs then return "No active game" end
+        Flux.resolveChronologicalFlux(gs)
+        endAction()
+        return "Chronological Flux resolved"
+    end)
+
+    Console.register("seed", function(args)
+        if not gs then return "No active game" end
+        local n = math.max(1, math.floor(tonumber(args[2]) or 1))
+        for _ = 1, n do
+            Phases.runInstabilityPhase(gs)
+        end
+        endAction()
+        return "Ran instability phase " .. n .. "x"
+    end)
+
+    Console.register("addcube", function(args)
+        if not gs then return "No active game" end
+        local city, period, color = args[2], args[3], args[4]
+        if not (city and period and color) then
+            return "Usage: addcube <city> <period> <color>"
+        end
+        if not (gs.cubes[city] and gs.cubes[city][period]) then
+            return "Unknown city/period: " .. (city or "?") .. "/" .. (period or "?")
+        end
+        Explosion.placeCubesAt(gs, city, period, color, 1)
+        endAction()
+        return "Added " .. color .. " cube at " .. city .. "/" .. period
+    end)
+
+    Console.register("clearcube", function(args)
+        if not gs then return "No active game" end
+        local city, period, color = args[2], args[3], args[4]
+        if not (city and period and color) then
+            return "Usage: clearcube <city> <period> <color>"
+        end
+        local node = gs.cubes[city] and gs.cubes[city][period]
+        if not node then
+            return "Unknown city/period: " .. (city or "?") .. "/" .. (period or "?")
+        end
+        node[color] = math.max(0, (node[color] or 0) - 1)
+        util.updateRepaired(gs)
+        endAction()
+        return "Removed " .. color .. " cube from " .. city .. "/" .. period
+    end)
+
+    Console.register("setinstability", function(args)
+        if not gs then return "No active game" end
+        local n = tonumber(args[2])
+        if not n then return "Usage: setinstability <n>" end
+        gs.instabilityIndex = math.max(1, math.min(7, math.floor(n)))
+        return "Instability index → " .. gs.instabilityIndex
+    end)
+
+    Console.register("win", function()
+        if not gs then return "No active game" end
+        gs.resolved = {blue = true, yellow = true, black = true, red = true}
+        util.updateRepaired(gs)
+        endAction()
+    end)
+
+    Console.register("lose", function()
+        if not gs then return "No active game" end
+        gs.lost = "debug: forced loss"
+        endAction()
+    end)
+
+    Console.register("dump", function()
+        if not gs then return "No active game" end
+        Console.print("city=" .. gs.currentCity .. "  period=" .. gs.currentPeriod)
+        Console.print("turn=" .. gs.turn .. "  actions=" .. gs.actionsRemaining ..
+                       "  instability=" .. gs.instabilityIndex)
+        Console.print("difficulty=" .. gs.difficulty .. "  role=" .. (gs.role or "?"))
+        Console.print("explosions=" .. gs.explosionCount)
+        local res = {}
+        for _, c in ipairs({"blue","yellow","black","red"}) do
+            if gs.resolved[c] then res[#res+1] = c end
+        end
+        Console.print("resolved=[" .. table.concat(res, ",") .. "]")
+        local rep = {}
+        for _, c in ipairs({"blue","yellow","black","red"}) do
+            if gs.repaired[c] then rep[#rep+1] = c end
+        end
+        Console.print("repaired=[" .. table.concat(rep, ",") .. "]")
+        if gs.priorityCity then
+            Console.print("priorityCity=" .. gs.priorityCity)
+        end
+    end)
+end
+
+-- ---------------------------------------------------------------------------
 -- Love2D callbacks
 -- ---------------------------------------------------------------------------
 function love.load()
     math.randomseed(os.time())
     Map.setMapHeight(LAYOUT.mapH)
+    initConsole()
 
     -- Try to resume the last session automatically
     local index = Save.loadIndex()
@@ -351,6 +463,7 @@ function love.update(dt)
         message.ttl = message.ttl - dt
         if message.ttl <= 0 then message = nil end
     end
+    Console.update(dt)
 end
 
 function love.draw()
@@ -439,7 +552,13 @@ function love.draw()
         love.graphics.printf("Actions: " .. tostring(gs.actionsRemaining), 0, LAYOUT.actY - 20, VIRTUAL_W, "right")
     end
 
+    Console.render()
+
     love.graphics.pop()
+end
+
+function love.textinput(text)
+    Console.textinput(text)
 end
 
 function love.mousepressed(sx, sy, button)
@@ -567,6 +686,16 @@ function love.wheelmoved(wx, wy)
 end
 
 function love.keypressed(key)
+    if key == "`" then
+        Console.toggle()
+        return
+    end
+
+    if Console.isOpen() then
+        Console.keypressed(key)
+        return
+    end
+
     if key == "escape" then love.event.quit() end
     if key == "r" and phase == "gameover" then
         enterProfileSelect()
