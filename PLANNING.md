@@ -431,21 +431,6 @@ Open design threads:
 
 ---
 
-### Phase 16 — Status bar readability & instability animation (medium)
-
-Make active game state legible at a glance.
-
-- **Role chip in status area** with tooltip describing the role's ability. Files: `src/ui/footer.lua` (or a new status strip), draws role color swatch + name; reuses `data/roles.lua` description text.
-- **Active-duration effect chips.** Render a chip for every currently active timed effect with a tooltip explaining duration + effect:
-  - `skipNextInstability` (Paradox Barrier played this turn)
-  - `sealedCity` (Temporal Seal target until next instability)
-  - Any challenge mod with a "next turn" / "this round" rider once triggered
-  - Coordinator free-move available / Failsafe retrieve available
-
-  Files: `src/ui/footer.lua` (new chip row), data sourced from `gs`.
-- **Distinguish RESOLVED vs REPAIRED.** Today both look like colored marks. Change REPAIRED to a thick **X** in the anomaly color (RESOLVED stays as a filled square). Files: `src/ui/footer.lua`, anywhere else the resolved tracker is drawn.
-- **Instability animation.** Today threat cards resolve all in one frame. New behavior: queue each card draw + cube placement with a ~2 s gap so the player can watch chaos unfold. Files: `src/ui/anim.lua` (new `threat_reveal` effect showing card name + city/period), `src/rules/phases.lua` `runInstabilityPhase` becomes async — split into steps and drive from the animation queue, or accumulate `pendingThreatSteps` on `gs` and have `main.lua` drain them on a timer. Watch interaction with auto-save (don't save mid-animation). The 2 s gap should be a tunable constant (not hard-coded inline) so Phase 18's options screen can expose it as an "Instability animation speed" slider — store the value on the profile (or global config) and read it at queue time.
-
 ---
 
 ### Phase 17 — New role: Chronomancer (small)
@@ -659,6 +644,15 @@ Implemented all 5 missing locked-role abilities. Also fixed a latent bug where `
 - `src/rules/actions.lua` — added `M.movementOptions(state, destCity, destPeriod)` pure-read helper
 - `tests/actions.spec.lua` — 9 new tests for `movementOptions`
 - `tests/helpers.lua` — added `H.contains()` array search utility; 262 total passing
+
+### Phase 16 — Status bar readability & instability animation ✓ Done
+
+- **Role chip + effect chips (footer, right-aligned).** `src/ui/footer.lua` now renders a pill-badge chip strip on the right edge of the footer. The rightmost chip is always the current role (color-coded, tooltip = ability description, looked up from `data/roles.lua` at module load via `ROLE_BY_ID`). Active-effect chips appear to its left: `Barrier` (skipNextInstability), `Sealed: [city]` (sealedCity), `Coord. Move` (coordinator role + move not yet used), `Retrieve` (failsafe_designer + not yet used). Each has a tooltip explaining duration and effect.
+- **REPAIRED → X mark.** The `★` glyph for REPAIRED anomalies replaced with two crossing `love.graphics.line` calls forming a thick X in the anomaly color. RESOLVED stays as `◆`. Tooltip legend updated accordingly.
+- **Async instability animation.** `Phases.buildInstabilitySteps(state)` draws all N threat cards from the deck into `threatDiscard` and returns step descriptors (`{card, stepType}`) without placing any cubes. `advancePhase` now enters `"instability_anim"` phase, executes the first step immediately, then `love.update` drains one step every `instabilityDelay` seconds (read from `profile.instabilityStepDelay`, default 2.0 — tunable in Phase 18 options screen). Each step calls cube placement + fires a new `Anim.threatReveal(label, color)` banner showing the drawn card's city/period at the bottom of the map area. Loss is detected per-step; gameover triggers immediately on `gs.lost`. Save happens only in `finishInstability()` via `endAction()` — no mid-animation save.
+- `src/ui/footer.lua`, `src/ui/anim.lua`, `src/rules/phases.lua`, `src/persistence/save.lua`, `main.lua` — all modified
+- `Phases.applyChallengeModEffect` promoted from local to `M.applyChallengeModEffect` so `main.lua` can call it during step drain; `runInstabilityPhase` (used by `seed` console command) unchanged
+- 262 total passing (no new tests — all changes are UI/orchestration layer)
 
 ### Phase 15 — Map and hand UX cleanup ✓ Done
 
