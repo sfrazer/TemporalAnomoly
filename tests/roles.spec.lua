@@ -194,6 +194,195 @@ describe("Roles", function()
     end)
 
     -- -------------------------------------------------------------------------
+    describe("Temporal Isolationist", function()
+        it("blocks cube placement in current city", function()
+            local state = H.makeState({currentCity = "atlanta"})
+            Roles.applyRole(state, "temporal_isolationist")
+            assert.is_false(Mod.canPlaceCube(state, "atlanta", "modern", "blue"))
+        end)
+
+        it("blocks cube placement in adjacent cities", function()
+            local state = H.makeState({currentCity = "atlanta"})
+            Roles.applyRole(state, "temporal_isolationist")
+            -- atlanta is adjacent to houston and new_york
+            assert.is_false(Mod.canPlaceCube(state, "houston",  "modern", "blue"))
+            assert.is_false(Mod.canPlaceCube(state, "new_york", "modern", "blue"))
+        end)
+
+        it("allows cube placement in non-adjacent cities", function()
+            local state = H.makeState({currentCity = "atlanta"})
+            Roles.applyRole(state, "temporal_isolationist")
+            -- seattle is not adjacent to atlanta
+            assert.is_true(Mod.canPlaceCube(state, "seattle",     "modern", "blue"))
+            assert.is_true(Mod.canPlaceCube(state, "los_angeles", "modern", "blue"))
+        end)
+
+        it("protection follows player when they move", function()
+            local state = H.makeState({currentCity = "atlanta"})
+            Roles.applyRole(state, "temporal_isolationist")
+            -- chicago is not adjacent to atlanta — currently allowed
+            assert.is_true(Mod.canPlaceCube(state, "chicago", "modern", "blue"))
+            -- move to chicago
+            state.currentCity = "chicago"
+            -- now chicago is blocked
+            assert.is_false(Mod.canPlaceCube(state, "chicago", "modern", "blue"))
+        end)
+    end)
+
+    -- -------------------------------------------------------------------------
+    describe("Engineer", function()
+        it("tryBuildOutpost succeeds with empty hand", function()
+            local state = H.makeState({currentCity = "atlanta"})
+            state.hand = {}
+            Roles.applyRole(state, "engineer")
+            local ok = Actions.tryBuildOutpost(state)
+            assert.is_true(ok)
+            assert.is_true(state.outposts["atlanta"])
+        end)
+
+        it("consumes no card (playerDiscard stays empty)", function()
+            local state = H.makeState({currentCity = "atlanta"})
+            state.hand = {}
+            Roles.applyRole(state, "engineer")
+            Actions.tryBuildOutpost(state)
+            assert.equals(0, #state.playerDiscard)
+        end)
+
+        it("still fails when outpost already exists", function()
+            local state = H.makeState({currentCity = "atlanta"})
+            state.outposts["atlanta"] = true
+            Roles.applyRole(state, "engineer")
+            local ok = Actions.tryBuildOutpost(state)
+            assert.is_false(ok)
+        end)
+
+        it("outpostCardRequired returns false", function()
+            local state = H.makeState()
+            Roles.applyRole(state, "engineer")
+            assert.is_false(Mod.outpostCardRequired(state))
+        end)
+    end)
+
+    -- -------------------------------------------------------------------------
+    describe("Researcher", function()
+        it("draws 1 extra card into hand on apply", function()
+            local state = H.makeState()
+            state.playerDeck = {
+                H.cityCard("chicago", "modern", "black"),
+                H.cityCard("seattle", "prehistory", "blue"),
+                H.cityCard("houston", "far_future", "red"),
+            }
+            state.hand = {}
+            Roles.applyRole(state, "researcher")
+            assert.equals(1, #state.hand)
+        end)
+
+        it("inserts a chronological_rewind into the player deck", function()
+            local state = H.makeState()
+            state.playerDeck = {H.cityCard("chicago", "modern", "black")}
+            state.hand = {}
+            Roles.applyRole(state, "researcher")
+            local found = false
+            for _, c in ipairs(state.playerDeck) do
+                if c.id == "chronological_rewind" then found = true end
+            end
+            assert.is_true(found)
+        end)
+
+        it("chronological_rewind card has type 'event'", function()
+            local state = H.makeState()
+            state.playerDeck = {H.cityCard("chicago", "modern", "black")}
+            state.hand = {}
+            Roles.applyRole(state, "researcher")
+            for _, c in ipairs(state.playerDeck) do
+                if c.id == "chronological_rewind" then
+                    assert.equals("event", c.type)
+                end
+            end
+        end)
+
+        it("does not crash when deck is empty", function()
+            local state = H.makeState()
+            state.playerDeck = {}
+            state.hand = {}
+            assert.has_no.errors(function()
+                Roles.applyRole(state, "researcher")
+            end)
+            assert.equals(1, #state.playerDeck)  -- only the inserted rewind
+        end)
+    end)
+
+    -- -------------------------------------------------------------------------
+    describe("Failsafe Designer", function()
+        it("tryRetrieveCard moves event card from discard to hand", function()
+            local state = H.makeState()
+            Roles.applyRole(state, "failsafe_designer")
+            state.playerDiscard = {H.eventCard("paradox_barrier")}
+            local ok = Actions.tryRetrieveCard(state, 1)
+            assert.is_true(ok)
+            assert.equals(0, #state.playerDiscard)
+            assert.equals(1, #state.hand)
+            assert.equals("paradox_barrier", state.hand[1].id)
+        end)
+
+        it("sets failsafeDesignerUsed after use", function()
+            local state = H.makeState()
+            Roles.applyRole(state, "failsafe_designer")
+            state.playerDiscard = {H.eventCard("temporal_slip")}
+            Actions.tryRetrieveCard(state, 1)
+            assert.is_true(state.failsafeDesignerUsed)
+        end)
+
+        it("fails on second call (once per run)", function()
+            local state = H.makeState()
+            Roles.applyRole(state, "failsafe_designer")
+            state.playerDiscard = {H.eventCard("paradox_barrier"), H.eventCard("temporal_slip")}
+            Actions.tryRetrieveCard(state, 1)
+            local ok, err = Actions.tryRetrieveCard(state, 1)
+            assert.is_false(ok)
+            assert.truthy(err)
+        end)
+
+        it("fails if chosen discard entry is not an event card", function()
+            local state = H.makeState()
+            Roles.applyRole(state, "failsafe_designer")
+            state.playerDiscard = {H.cityCard("chicago", "modern", "black")}
+            local ok, err = Actions.tryRetrieveCard(state, 1)
+            assert.is_false(ok)
+            assert.truthy(err)
+            assert.equals(0, #state.hand)
+        end)
+
+        it("fails with out-of-range index", function()
+            local state = H.makeState()
+            Roles.applyRole(state, "failsafe_designer")
+            state.playerDiscard = {}
+            local ok, err = Actions.tryRetrieveCard(state, 1)
+            assert.is_false(ok)
+            assert.truthy(err)
+        end)
+    end)
+
+    -- -------------------------------------------------------------------------
+    describe("Temporal Analyst", function()
+        it("applyRole does not error", function()
+            assert.has_no.errors(function()
+                local state = H.makeState()
+                Roles.applyRole(state, "temporal_analyst")
+            end)
+        end)
+
+        it("registers no passive modifier hooks", function()
+            local state = H.makeState({currentCity = "atlanta"})
+            Roles.applyRole(state, "temporal_analyst")
+            -- canPlaceCube unaffected (no veto)
+            assert.is_true(Mod.canPlaceCube(state, "atlanta", "modern", "blue"))
+            -- outpostCardRequired unaffected (still true)
+            assert.is_true(Mod.outpostCardRequired(state))
+        end)
+    end)
+
+    -- -------------------------------------------------------------------------
     describe("applyRole", function()
         it("does not error for an unknown role id", function()
             local state = H.makeState()

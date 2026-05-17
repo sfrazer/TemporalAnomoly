@@ -40,6 +40,7 @@ function H.makeState(overrides)
         volatileAnomalyActive = false,
         skipNextInstability   = false,
         sealedCity            = nil,
+        failsafeDesignerUsed  = false,
     }
     if overrides then
         for k, v in pairs(overrides) do state[k] = v end

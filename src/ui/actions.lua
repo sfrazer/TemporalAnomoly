@@ -3,14 +3,16 @@ local Tooltip = require("src.ui.tooltip")
 local M = {}
 
 local BUTTON_TIP = {
-    travel          = "Move to an adjacent city in the same time period, or cross periods via a Temporal Outpost.",
-    teleport        = "Discard a (city, period) card to move instantly to that location.",
-    teleport_alt    = "Discard a card matching your current location to teleport to any city in any period.",
-    build           = "Discard a card matching your current city to place Temporal Outposts in all 4 periods of that city.",
-    clear           = "Remove 1 incident cube. Removes ALL cubes of that color if the anomaly is already RESOLVED.",
-    resolve         = "At a Temporal Outpost: discard 5 same-color cards to RESOLVE that anomaly.",
-    end_turn        = "End your action phase. Draw 2 cards, then place threat cubes based on Instability Level.",
+    travel           = "Move to an adjacent city in the same time period, or cross periods via a Temporal Outpost.",
+    teleport         = "Discard a (city, period) card to move instantly to that location.",
+    teleport_alt     = "Discard a card matching your current location to teleport to any city in any period.",
+    build            = "Discard a card matching your current city to place Temporal Outposts in all 4 periods of that city.",
+    clear            = "Remove 1 incident cube. Removes ALL cubes of that color if the anomaly is already RESOLVED.",
+    resolve          = "At a Temporal Outpost: discard 5 same-color cards to RESOLVE that anomaly.",
+    end_turn         = "End your action phase. Draw 2 cards, then place threat cubes based on Instability Level.",
     coordinator_move = "Coordinator ability: move to any city with a Temporal Outpost for free (once per turn).",
+    retrieve_card    = "Failsafe Designer: return 1 event card from your discard to hand (once per run, free).",
+    peek_threat      = "Temporal Analyst: spend 1 action to see the top 2 cards of the threat deck.",
 }
 
 local BASE_BUTTONS = {
@@ -33,8 +35,13 @@ local function getButtons(gs)
     local btns = {}
     for _, b in ipairs(BASE_BUTTONS) do btns[#btns + 1] = b end
     if gs and gs.role == "coordinator" and not gs.coordinatorMoveUsed then
-        -- Insert before "End Turn"
         table.insert(btns, #btns, {id = "coordinator_move", label = "Coord. Move"})
+    end
+    if gs and gs.role == "failsafe_designer" and not gs.failsafeDesignerUsed then
+        table.insert(btns, #btns, {id = "retrieve_card", label = "Retrieve Card"})
+    end
+    if gs and gs.role == "temporal_analyst" then
+        table.insert(btns, #btns, {id = "peek_threat", label = "Peek Threat"})
     end
     return btns
 end
@@ -65,6 +72,10 @@ function M.render(actY, actH, activeId, gs)
             love.graphics.setColor(0.22, 0.45, 0.22)
         elseif btn.id == "coordinator_move" then
             love.graphics.setColor(0.35, 0.18, 0.55)
+        elseif btn.id == "retrieve_card" then
+            love.graphics.setColor(0.12, 0.42, 0.44)
+        elseif btn.id == "peek_threat" then
+            love.graphics.setColor(0.44, 0.34, 0.10)
         else
             love.graphics.setColor(0.20, 0.24, 0.30)
         end

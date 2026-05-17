@@ -537,6 +537,26 @@ Wire up all cards that should be playable from the hand. Interaction model: firs
 - `main.lua` — `handleCardPlay` (with modal chains per card); `canPlaceCube` hook in `initAnims` enforces `sealedCity`; `gs.sealedCity = nil` cleared after instability; mousepressed uses second-click-to-play for event cards.
 - `tests/events.spec.lua` — 16 new tests covering all 7 implemented effects and both stubs; 233 total passing.
 
+### Phase 12 — Locked Role Abilities ✓ Done
+Implemented all 5 missing locked-role abilities. Also fixed a latent bug where `applyRole` called `fn()` instead of `fn(state)`, silently breaking any role that needs to mutate state at setup time.
+
+| Role | Ability |
+|---|---|
+| Temporal Isolationist | `canPlaceCube` hook blocks placements in player's current city and all adjacent cities |
+| Engineer | `outpostCardRequired` hook returns `false`, skipping card discard in `tryBuildOutpost` |
+| Researcher | On `applyRole`: draws 1 extra card into hand; inserts a free `chronological_rewind` at random deck position |
+| Failsafe Designer | `Retrieve Card` button (teal, free action) opens event-card picker from playerDiscard; `tryRetrieveCard` moves chosen card to hand; usable once per run via `failsafeDesignerUsed` flag |
+| Temporal Analyst | `Peek Threat` button (amber, costs 1 action) shows info modal with names of top 2 threat deck cards |
+
+- `data/roles.lua` — updated Researcher description ("Stabilizer Cache" → "Chronological Rewind")
+- `src/state/gameState.lua` — added `failsafeDesignerUsed = false`
+- `src/state/modifiers.lua` — added `outpostCardRequired` fold hook
+- `src/rules/roles.lua` — fixed `fn(state)`; implemented all 5 APPLY functions; added adjacency lookup built at module load
+- `src/rules/actions.lua` — `tryBuildOutpost` wraps card requirement in hook check; added `tryRetrieveCard`
+- `src/ui/actions.lua` — `retrieve_card` and `peek_threat` buttons added with role-conditional visibility and tooltips
+- `main.lua` — handlers for both new buttons
+- `tests/roles.spec.lua` — 19 new tests added alongside existing starter-role tests; 252 total passing
+
 ### Cross-cutting / always-on
 - New code ships with Busted tests in `tests/`; `busted` is green before any UI work merges.
 - All rule lookups go through the modifier pipeline once Phase 3 lands — never bypass it.

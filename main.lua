@@ -325,6 +325,49 @@ local function handleButtonClick(id)
         end)
         return
     end
+
+    if id == "retrieve_card" then
+        local eventItems = {}
+        for i, c in ipairs(gs.playerDiscard) do
+            if c.type == "event" then
+                eventItems[#eventItems + 1] = {label = c.name, value = i}
+            end
+        end
+        if #eventItems == 0 then
+            showMsg("No event cards in discard")
+            activeBtn = nil
+            return
+        end
+        modal = Modals.new("Retrieve which event card?", eventItems, function(idx)
+            local ok, err = Actions.tryRetrieveCard(gs, idx)
+            if ok then
+                showMsg("Card returned to hand")
+                endAction()
+            else
+                showMsg(err or "Cannot retrieve")
+            end
+        end)
+        return
+    end
+
+    if id == "peek_threat" then
+        local items = {}
+        for i = 1, math.min(2, #gs.threatDeck) do
+            local card = gs.threatDeck[#gs.threatDeck - i + 1]
+            items[#items + 1] = {label = card.name or card.id, value = i}
+        end
+        spendAction(function()
+            if #items > 0 then
+                modal = Modals.new("Top of Threat Deck:", items, function()
+                    endAction()
+                end)
+            else
+                showMsg("Threat deck is empty")
+            end
+            return true
+        end)
+        return
+    end
 end
 
 local function handleMapClick(vx, vy)

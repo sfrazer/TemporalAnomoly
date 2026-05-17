@@ -86,6 +86,11 @@ function M.canBuildOutpost(state, city)
     return permit("canBuildOutpost", state, city)
 end
 
+-- Returns true by default; Engineer registers false to skip the card discard.
+function M.outpostCardRequired(state)
+    return fold("outpostCardRequired", state, true)
+end
+
 function M.canPlaceCube(state, city, period, color)
     return permit("canPlaceCube", state, city, period, color)
 end

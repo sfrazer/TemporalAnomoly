@@ -40,7 +40,7 @@ return {
         id          = "researcher",
         name        = "Researcher",
         color       = {0.50, 0.50, 0.55},
-        description = "Start with +1 card and a free Stabilizer Cache in deck.",
+        description = "Start with +1 card and a free Chronological Rewind in deck.",
         unlocked    = false,
         unlockHint  = "Win at Heroic",
     },
