@@ -431,43 +431,6 @@ Open design threads:
 
 ---
 
-### Phase 13 — Bugfix & dev tooling (small)
-
-Focused cleanup: one reported gameplay bug + two read-only console commands. Quick win, isolated changes.
-
-- **Bug:** Chronologist is supposed to auto-clear REPAIRED-color cubes on arrival at a new location. Tests in `tests/roles.spec.lua` cover this for `tryTravel` and `tryTeleport`, but the user reports it doesn't fire in-game — investigate whether (a) the hook isn't being applied on `tryCoordinatorMove` / event-card moves like Temporal Slip, (b) the `onArrive` fire site is missing somewhere, or (c) the test passes but the code path is dead. Files: `src/rules/actions.lua`, `src/rules/roles.lua`, possibly `main.lua` if event-card moves are missing the fire.
-- **Console:** add `showPlayerDeck` and `showThreatDeck` to `src/debug/console.lua` — print contents in draw order (top of deck first). One-line entries `<idx>: <name> (<details>)`.
-- Tests: extend `tests/roles.spec.lua` with whichever arrival path was broken; console additions don't need tests (they're print-only).
-
----
-
-### Phase 14 — Turn flow polish (medium)
-
-Two related changes to how the action loop feels.
-
-- **Don't auto-end turn at actions=0.** Today `spendAction → endAction` advances phases as soon as actions hit zero. New behavior: when `actionsRemaining == 0`, stay in `phase = "action"` so the player can still play event cards (free). Only `End Turn` button click calls `advancePhase`. Disable Travel/Teleport/Build/Clear/Resolve buttons when out of actions (event cards remain playable). Files: `main.lua` (`spendAction`, `endAction`, button enable predicates), `src/ui/actions.lua` (visual disabled state).
-- **Unified click-to-move.** Click on any (city, period) node on the map and the game decides the action:
-  - Adjacent same-period or via-Outpost → Travel.
-  - Have the matching destination card → prompt to Teleport.
-  - Have a card matching current location → prompt to Teleport Alt.
-  - Have both kinds of cards → modal asking which to use.
-  - No legal path → flash error / showMsg.
-
-  The `Travel` / `Teleport` / `Teleport Alt` buttons become redundant; consider removing or repurposing as filter toggles. Files: `main.lua` (`handleMapClick`), `src/rules/actions.lua` (consider a `tryMove(state, city, period)` dispatcher). Tests: `tests/actions.spec.lua` add `tryMove` coverage for each branch.
-
----
-
-### Phase 15 — Map and hand UX cleanup (medium)
-
-Map zoom is awful — rip it out. Hand needs scrolling + sorting. Modals need richer hover.
-
-- **Remove map zoom/scroll/pan.** Lock the camera to a fixed 2×2 layout sized to the virtual canvas. Files: `src/ui/map.lua` (drop `cam.scale`, scroll handlers, drag logic; keep `getNodeWorld` / `worldToVirtual` but make them identity / static). Drop the `wheelmoved` handler in `main.lua`.
-- **Scroll + sort hand.** Add a horizontal scrollbar (or arrow buttons) when hand > visible width. Add a sort toggle: by color, by period, by type (city/event/flux), or insertion order. Files: `src/ui/hand.lua`, persisted preference on profile (`profile.handSortMode`).
-- **Resolve Anomaly modal — highlight only viable colors.** Compute per-color hand counts and the current `Mod.cardsToResolveAnomaly(state)` threshold; render unavailable colors greyed out and unclickable. Files: `main.lua` (resolve button handler), `src/ui/modals.lua` (item-disabled rendering).
-- **Tooltips inside modals.** Today `Tooltip.suppress()` blocks all tooltips when a modal is open. Replace with a more surgical rule: modal items can `push` their own tooltips during render, and only *non-modal* hit areas get suppressed. Files: `src/ui/tooltip.lua` (add a "modal layer" concept), `src/ui/modals.lua` (push per-item tooltips).
-
----
-
 ### Phase 16 — Status bar readability & instability animation (medium)
 
 Make active game state legible at a glance.
@@ -677,6 +640,34 @@ Implemented all 5 missing locked-role abilities. Also fixed a latent bug where `
 - `src/ui/tooltip.lua` — added `Tooltip.suppress()`: sets a one-frame flag causing `render()` to drop all accumulated hit areas without drawing; fixes tooltips from the map bleeding through open modals
 - `main.lua` — `if modal then Tooltip.suppress() end` added in draw loop before `Tooltip.render()`
 - `tests/roles.spec.lua` — 19 new tests added alongside existing starter-role tests; 252 total passing
+
+### Phase 13 — Bugfix & dev tooling ✓ Done
+
+- **Chronologist REPAIRED bug fixed.** `onArrive` handler was checking `state.repaired[color]` instead of `state.resolved[color]`. An anomaly is only REPAIRED when there are 0 cubes on the board, making the condition self-defeating — the handler could never fire in normal gameplay. Changed to check `resolved` (cubes still exist and need clearing) and added `util.updateRepaired` call so arriving on the last cube of a RESOLVED anomaly correctly advances it to REPAIRED. Role description updated to "Auto-clears RESOLVED cubes on arrival". Existing tests happened to pass because they manually set both flags; a new test covers the real RESOLVED-but-not-yet-REPAIRED scenario.
+- **Console commands added:** `showplayerdeck` and `showthreatdeck` — print each deck in draw order (index 1 = top) with name and card type/city/period detail.
+- `src/rules/roles.lua` — `onArrive` handler fix + `util.updateRepaired` call
+- `data/roles.lua` — description updated ("REPAIRED" → "RESOLVED")
+- `main.lua` — `showplayerdeck` and `showthreatdeck` registered in `initConsole`
+- `tests/roles.spec.lua` — test descriptions updated; new REPAIRED-advancement test; 253 total passing
+
+### Phase 14 — Turn flow polish ✓ Done
+
+- **Explicit End Turn.** `spendAction` no longer calls `advancePhase()` when actions hit zero. The player stays in the action phase and can play event cards freely. Only the End Turn button advances the phase. Action-costing buttons (Build, Clear, Resolve, Peek Threat) render visually dimmed at 0 actions and show "No actions remaining" if clicked. Clicking an unreachable map node at 0 actions shows "No actions left".
+- **Unified click-to-move.** Travel, Teleport, and Teleport Alt buttons removed. Clicking any city node calls `Actions.movementOptions()` to find all legal paths. If travel is available it fires immediately. Otherwise, a single teleport option executes directly; multiple options show a picker modal. Coordinator Move is also offered inline as a free option when available — works both via the existing button and via direct map click.
+- `main.lua` — removed auto-advance in `spendAction`; removed three movement button handlers; rewrote `handleMapClick` with unified logic; travel short-circuits to immediate execution
+- `src/ui/actions.lua` — removed travel/teleport/teleport_alt buttons and tooltips; added `COSTS_ACTION` set and disabled visual rendering
+- `src/rules/actions.lua` — added `M.movementOptions(state, destCity, destPeriod)` pure-read helper
+- `tests/actions.spec.lua` — 9 new tests for `movementOptions`
+- `tests/helpers.lua` — added `H.contains()` array search utility; 262 total passing
+
+### Phase 15 — Map and hand UX cleanup ✓ Done
+
+- **Map zoom/scroll/pan removed.** Dropped `cam` struct, all drag/scroll/wheel handlers, and `camToMap`. `worldToVirtual` is now identity (`wx, MAP_Y + wy`). `hitCity` uses direct virtual coords. `love.wheelmoved` and pan handlers removed from `main.lua`. Map is permanently locked to the full 1280×540 2×2 grid.
+- **Hand scroll + sort.** `src/ui/hand.lua` rewritten. Shows up to 10 cards per page; `<` / `>` arrow buttons appear at the edges when hand exceeds 10. Sort mode cycles through `insertion | color | period | type` via a clickable label in the lower-right of the hand strip. Sort mode persisted on `profile.handSortMode`; restored on `startGame`/`resumeGame`. `Hand.hitControl` returns `"scroll_left" | "scroll_right" | "sort"` before `Hand.hitCard` is checked. `getSortedIndices` sorts a copy of hand indices; `hitCard` maps sorted display positions back to original hand indices so selection/play still uses the real index.
+- **Resolve modal viability filter.** Resolve handler now calls `Mod.cardsToResolveAnomaly` and counts per-color city cards in hand. Each color item shows `count/threshold` and is `disabled = true` when already RESOLVED or below threshold. Disabled items render dim and are unclickable in `Modals.click`. Each item includes a `tip` for hover context.
+- **Tooltips inside modals.** `Tooltip.pushModal(x,y,w,h,content)` registers areas in a separate `_modalAreas` list that survives `suppress()`. `render()` checks modal areas first (regardless of suppression), then non-modal areas (only if not suppressed). `Modals.render` calls `Tooltip.pushModal` for each item with a `tip` field. Now `Tooltip.suppress()` in the draw loop blocks map/button/hand tooltips but not modal-item tooltips.
+- `src/ui/map.lua`, `src/ui/hand.lua`, `src/ui/tooltip.lua`, `src/ui/modals.lua`, `main.lua`, `src/persistence/save.lua` — all modified
+- 262 total passing (no new tests — all changes are UI/presentation layer)
 
 ### Cross-cutting / always-on
 - New code ships with Busted tests in `tests/`; `busted` is green before any UI work merges.

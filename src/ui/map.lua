@@ -12,9 +12,6 @@ local QUAD_W = 640
 local QUAD_H = 270
 local NODE_R = 20
 
--- Camera (pan + zoom, module-level)
-local cam = {x = 0, y = 0, scale = 1.0, dragging = false, dragVX = 0, dragVY = 0}
-
 -- Period accent colors {r, g, b}
 local PCOLOR = {
     prehistory = {0.25, 0.52, 0.95},
@@ -76,13 +73,7 @@ end
 
 -- Convert world-space map coordinates to virtual canvas coordinates.
 function M.worldToVirtual(wx, wy)
-    return cam.x + wx * cam.scale,
-           MAP_Y + cam.y + wy * cam.scale
-end
-
-local function camToMap(vx, vy)
-    return (vx - cam.x) / cam.scale,
-           (vy - MAP_Y - cam.y) / cam.scale
+    return wx, MAP_Y + wy
 end
 
 local function drawConnections(qx, qy)
@@ -162,10 +153,10 @@ local function drawCity(state, cityId, periodId, qx, qy, pc, isPlayer)
         end
     end
 
-    -- Tooltip: build in virtual space (undo camera transform)
-    local vcx = cam.x + x * cam.scale
-    local vcy = MAP_Y + cam.y + y * cam.scale
-    local vr  = (NODE_R + 8) * cam.scale
+    -- Tooltip: virtual canvas coords (world space = virtual canvas since scale=1)
+    local vcx = x
+    local vcy = MAP_Y + y
+    local vr  = NODE_R + 8
     local tipLines = {cityById[cityId].name .. " — " .. (PERIOD_NAME[periodId] or periodId)}
     local cubeStrs = {}
     for _, color in ipairs({"blue","yellow","black","red"}) do
@@ -217,8 +208,7 @@ function M.render(state)
     love.graphics.rectangle("fill", 0, MAP_Y, QUAD_W*2, mapH)
 
     love.graphics.push()
-    love.graphics.translate(cam.x, MAP_Y + cam.y)
-    love.graphics.scale(cam.scale, cam.scale)
+    love.graphics.translate(0, MAP_Y)
 
     for _, q in ipairs(PERIOD_QUADS) do
         drawPeriod(state, q.id, q.col, q.row)
@@ -227,40 +217,10 @@ function M.render(state)
     love.graphics.pop()
 end
 
-function M.mousepressed(vx, vy, button)
-    if button == 1 and vy >= MAP_Y and vy < MAP_Y + mapH then
-        cam.dragging = true
-        cam.dragVX   = vx
-        cam.dragVY   = vy
-    end
-end
-
-function M.mousemoved(vx, vy, dx, dy)
-    if cam.dragging then
-        cam.x = cam.x + dx
-        cam.y = cam.y + dy
-    end
-end
-
-function M.mousereleased(button)
-    if button == 1 then cam.dragging = false end
-end
-
-function M.wheelmoved(vx, vy, wx, wy)
-    -- Zoom toward cursor
-    local factor = wy > 0 and 1.12 or (1/1.12)
-    local newScale = math.max(0.35, math.min(3.5, cam.scale * factor))
-    -- Adjust offset so zoom is centered on cursor position
-    local mx, my = camToMap(vx, vy)
-    cam.x     = vx - mx * newScale
-    cam.y     = vy - MAP_Y - my * newScale
-    cam.scale = newScale
-end
-
 -- Returns {city=id, period=id} or nil
 function M.hitCity(vx, vy)
     if vy < MAP_Y or vy >= MAP_Y + mapH then return nil end
-    local mx, my = camToMap(vx, vy)
+    local mx, my = vx, vy - MAP_Y
     for _, q in ipairs(PERIOD_QUADS) do
         local qx = q.col * QUAD_W
         local qy = q.row * QUAD_H
