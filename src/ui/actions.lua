@@ -1,4 +1,17 @@
+local Tooltip = require("src.ui.tooltip")
+
 local M = {}
+
+local BUTTON_TIP = {
+    travel          = "Move to an adjacent city in the same time period, or cross periods via a Temporal Outpost.",
+    teleport        = "Discard a (city, period) card to move instantly to that location.",
+    teleport_alt    = "Discard a card matching your current location to teleport to any city in any period.",
+    build           = "Discard a card matching your current city to place Temporal Outposts in all 4 periods of that city.",
+    clear           = "Remove 1 incident cube. Removes ALL cubes of that color if the anomaly is already RESOLVED.",
+    resolve         = "At a Temporal Outpost: discard 5 same-color cards to RESOLVE that anomaly.",
+    end_turn        = "End your action phase. Draw 2 cards, then place threat cubes based on Instability Level.",
+    coordinator_move = "Coordinator ability: move to any city with a Temporal Outpost for free (once per turn).",
+}
 
 local BASE_BUTTONS = {
     {id = "travel",      label = "Travel"},
@@ -68,6 +81,10 @@ function M.render(actY, actH, activeId, gs)
         local font = love.graphics.getFont()
         local tw   = font:getWidth(btn.label)
         love.graphics.print(btn.label, x + (btnW - tw)/2, y + (BTN_H - font:getHeight())/2)
+
+        if BUTTON_TIP[btn.id] then
+            Tooltip.push(x, y, btnW, BTN_H, BUTTON_TIP[btn.id])
+        end
     end
 end
 

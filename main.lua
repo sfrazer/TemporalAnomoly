@@ -12,6 +12,7 @@ local Unlocks       = require("src.rules.unlocks")
 local Flux          = require("src.rules.flux")
 local Explosion     = require("src.rules.explosion")
 local Console       = require("src.debug.console")
+local Tooltip       = require("src.ui.tooltip")
 
 local Map              = require("src.ui.map")
 local Hand             = require("src.ui.hand")
@@ -540,6 +541,7 @@ function love.draw()
         love.graphics.printf("Actions: " .. tostring(gs.actionsRemaining), 0, LAYOUT.actY - 20, VIRTUAL_W, "right")
     end
 
+    Tooltip.render()
     Console.render()
 
     love.graphics.pop()
@@ -672,6 +674,7 @@ end
 
 function love.mousemoved(sx, sy, dx, dy)
     local vx, vy = toVirtual(sx, sy)
+    Tooltip.setMouse(vx, vy)
     -- Scale delta too
     local ww, wh = love.graphics.getDimensions()
     local scale  = math.min(ww/VIRTUAL_W, wh/VIRTUAL_H)

@@ -62,7 +62,8 @@ TemporalAnomaly/
 │   │   ├── profileSelect.lua     -- 3-slot profile picker with create/delete
 │   │   ├── metaShop.lua          -- Research Lab: Starting Bonuses, Deck Upgrades, Challenge Mods
 │   │   ├── difficultySelect.lua  -- 4-option difficulty picker (Introductory → Legendary)
-│   │   └── gameOver.lua          -- VICTORY/DEFEAT card with Play Again / Return to Shop / Change Role
+│   │   ├── gameOver.lua          -- VICTORY/DEFEAT card with Play Again / Return to Shop / Change Role
+│   │   └── tooltip.lua           -- push-then-render hover tooltips; rect and circle hit areas; segment-table rich text
 │   ├── persistence/
 │   │   ├── save.lua              -- binser serialize/deserialize; newProfile, serializeState
 │   │   └── autosave.lua          -- after-action auto-save; getProfile/getSlot accessors
@@ -482,14 +483,12 @@ Test after each change by running `busted` from the root of the project.
 - R key now returns to role select instead of profile select.
 - Bug fix: `AutoSave.finish()` was nilifying slot and profile, causing the shop to show 0 RP and `commitShop` to silently bail after returning from gameover. Fix: capture slot/profile before `finish()`, then re-init AutoSave so the updated profile stays accessible.
 
-### Phase 10B — Tooltips
-Hover explanation for every interactive element; no scripted tutorial needed.
-- `src/ui/tooltip.lua` — floating tooltip rendered near cursor; caller passes `{text, x, y, w, h}` hit areas each frame.
-- Action buttons: what the action does and its card/resource cost.
-- Hand cards: full card text on hover.
-- Footer stats: explain cube-supply warning threshold, explosion limit, instability schedule.
-- Map city nodes: show current cube counts as text on hover.
-- Implementation touchpoints: `main.lua` tracks `love.mousemoved` hover position; tooltip module is the last thing rendered each frame.
+### Phase 10B — Tooltips ✓
+- `src/ui/tooltip.lua` — push-then-render accumulator. `push(x,y,w,h,content)` for rects, `pushCircle(cx,cy,r,content)` for map nodes. Content is a plain string (word-wrapped at 300px) or a segment table `{t, r, g, b, bold}` for inline color/weight. Bold is simulated by double-printing at `(x+1,y)`. `render()` finds the first hovered area, draws the floating box edge-clamped to the virtual canvas, then clears all areas. `setMouse(vx,vy)` called from `love.mousemoved`.
+- **Action buttons** — per-button description of requirement and effect (8 buttons including Coordinator Move).
+- **Hand cards** — city cards show name + discard hint; event cards show their `description` field; flux cards explain the full resolution sequence.
+- **Footer stats** — deck count (loss/warn thresholds), per-color cube supply (loss/warn thresholds), instability schedule with current step in **bold red**, explosion count (loss/warn thresholds), resolved/repaired status legend.
+- **Map city nodes** — city + period name, non-zero cube counts, Temporal Outpost flag, Priority City warning. Uses `pushCircle` with virtual-space coordinates derived from camera state (`cam.x + wx * cam.scale`).
 
 ### Phase 10C — Accessibility
 Make the four anomaly colors distinguishable without relying solely on hue.
