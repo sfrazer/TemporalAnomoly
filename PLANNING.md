@@ -431,32 +431,6 @@ Open design threads:
 
 ---
 
-### Phase 13 — Bugfix & dev tooling (small)
-
-Focused cleanup: one reported gameplay bug + two read-only console commands. Quick win, isolated changes.
-
-- **Bug:** Chronologist is supposed to auto-clear REPAIRED-color cubes on arrival at a new location. Tests in `tests/roles.spec.lua` cover this for `tryTravel` and `tryTeleport`, but the user reports it doesn't fire in-game — investigate whether (a) the hook isn't being applied on `tryCoordinatorMove` / event-card moves like Temporal Slip, (b) the `onArrive` fire site is missing somewhere, or (c) the test passes but the code path is dead. Files: `src/rules/actions.lua`, `src/rules/roles.lua`, possibly `main.lua` if event-card moves are missing the fire.
-- **Console:** add `showPlayerDeck` and `showThreatDeck` to `src/debug/console.lua` — print contents in draw order (top of deck first). One-line entries `<idx>: <name> (<details>)`.
-- Tests: extend `tests/roles.spec.lua` with whichever arrival path was broken; console additions don't need tests (they're print-only).
-
----
-
-### Phase 14 — Turn flow polish (medium)
-
-Two related changes to how the action loop feels.
-
-- **Don't auto-end turn at actions=0.** Today `spendAction → endAction` advances phases as soon as actions hit zero. New behavior: when `actionsRemaining == 0`, stay in `phase = "action"` so the player can still play event cards (free). Only `End Turn` button click calls `advancePhase`. Disable Travel/Teleport/Build/Clear/Resolve buttons when out of actions (event cards remain playable). Files: `main.lua` (`spendAction`, `endAction`, button enable predicates), `src/ui/actions.lua` (visual disabled state).
-- **Unified click-to-move.** Click on any (city, period) node on the map and the game decides the action:
-  - Adjacent same-period or via-Outpost → Travel.
-  - Have the matching destination card → prompt to Teleport.
-  - Have a card matching current location → prompt to Teleport Alt.
-  - Have both kinds of cards → modal asking which to use.
-  - No legal path → flash error / showMsg.
-
-  The `Travel` / `Teleport` / `Teleport Alt` buttons become redundant; consider removing or repurposing as filter toggles. Files: `main.lua` (`handleMapClick`), `src/rules/actions.lua` (consider a `tryMove(state, city, period)` dispatcher). Tests: `tests/actions.spec.lua` add `tryMove` coverage for each branch.
-
----
-
 ### Phase 15 — Map and hand UX cleanup (medium)
 
 Map zoom is awful — rip it out. Hand needs scrolling + sorting. Modals need richer hover.
@@ -677,6 +651,25 @@ Implemented all 5 missing locked-role abilities. Also fixed a latent bug where `
 - `src/ui/tooltip.lua` — added `Tooltip.suppress()`: sets a one-frame flag causing `render()` to drop all accumulated hit areas without drawing; fixes tooltips from the map bleeding through open modals
 - `main.lua` — `if modal then Tooltip.suppress() end` added in draw loop before `Tooltip.render()`
 - `tests/roles.spec.lua` — 19 new tests added alongside existing starter-role tests; 252 total passing
+
+### Phase 13 — Bugfix & dev tooling ✓ Done
+
+- **Chronologist REPAIRED bug fixed.** `onArrive` handler was checking `state.repaired[color]` instead of `state.resolved[color]`. An anomaly is only REPAIRED when there are 0 cubes on the board, making the condition self-defeating — the handler could never fire in normal gameplay. Changed to check `resolved` (cubes still exist and need clearing) and added `util.updateRepaired` call so arriving on the last cube of a RESOLVED anomaly correctly advances it to REPAIRED. Role description updated to "Auto-clears RESOLVED cubes on arrival". Existing tests happened to pass because they manually set both flags; a new test covers the real RESOLVED-but-not-yet-REPAIRED scenario.
+- **Console commands added:** `showplayerdeck` and `showthreatdeck` — print each deck in draw order (index 1 = top) with name and card type/city/period detail.
+- `src/rules/roles.lua` — `onArrive` handler fix + `util.updateRepaired` call
+- `data/roles.lua` — description updated ("REPAIRED" → "RESOLVED")
+- `main.lua` — `showplayerdeck` and `showthreatdeck` registered in `initConsole`
+- `tests/roles.spec.lua` — test descriptions updated; new REPAIRED-advancement test; 253 total passing
+
+### Phase 14 — Turn flow polish ✓ Done
+
+- **Explicit End Turn.** `spendAction` no longer calls `advancePhase()` when actions hit zero. The player stays in the action phase and can play event cards freely. Only the End Turn button advances the phase. Action-costing buttons (Build, Clear, Resolve, Peek Threat) render visually dimmed at 0 actions and show "No actions remaining" if clicked. Clicking an unreachable map node at 0 actions shows "No actions left".
+- **Unified click-to-move.** Travel, Teleport, and Teleport Alt buttons removed. Clicking any city node calls `Actions.movementOptions()` to find all legal paths. If travel is available it fires immediately. Otherwise, a single teleport option executes directly; multiple options show a picker modal. Coordinator Move is also offered inline as a free option when available — works both via the existing button and via direct map click.
+- `main.lua` — removed auto-advance in `spendAction`; removed three movement button handlers; rewrote `handleMapClick` with unified logic; travel short-circuits to immediate execution
+- `src/ui/actions.lua` — removed travel/teleport/teleport_alt buttons and tooltips; added `COSTS_ACTION` set and disabled visual rendering
+- `src/rules/actions.lua` — added `M.movementOptions(state, destCity, destPeriod)` pure-read helper
+- `tests/actions.spec.lua` — 9 new tests for `movementOptions`
+- `tests/helpers.lua` — added `H.contains()` array search utility; 262 total passing
 
 ### Cross-cutting / always-on
 - New code ships with Busted tests in `tests/`; `busted` is green before any UI work merges.
