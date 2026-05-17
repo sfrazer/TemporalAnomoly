@@ -1,16 +1,19 @@
-local GameState  = require("src.state.gameState")
-local Actions    = require("src.rules.actions")
-local Phases     = require("src.rules.phases")
-local WinLose    = require("src.rules.winLose")
-local Mod        = require("src.state.modifiers")
-local Roles      = require("src.rules.roles")
+local GameState     = require("src.state.gameState")
+local Actions       = require("src.rules.actions")
+local Phases        = require("src.rules.phases")
+local WinLose       = require("src.rules.winLose")
+local Mod           = require("src.state.modifiers")
+local Roles         = require("src.rules.roles")
+local Save          = require("src.persistence.save")
+local AutoSave      = require("src.persistence.autosave")
 
-local Map        = require("src.ui.map")
-local Hand       = require("src.ui.hand")
-local UIActions  = require("src.ui.actions")
-local Footer     = require("src.ui.footer")
-local Modals     = require("src.ui.modals")
-local RoleSelect = require("src.ui.roleSelect")
+local Map           = require("src.ui.map")
+local Hand          = require("src.ui.hand")
+local UIActions     = require("src.ui.actions")
+local Footer        = require("src.ui.footer")
+local Modals        = require("src.ui.modals")
+local RoleSelect    = require("src.ui.roleSelect")
+local ProfileSelect = require("src.ui.profileSelect")
 
 -- ---------------------------------------------------------------------------
 -- Layout (virtual 1280×720)
@@ -28,13 +31,14 @@ local LAYOUT = {
 -- ---------------------------------------------------------------------------
 -- Game state
 -- ---------------------------------------------------------------------------
-local gs          -- GameState table
-local modal       -- active Modals.new() table, or nil
-local activeBtn   -- currently highlighted action button id
+local gs            -- GameState table
+local modal         -- active Modals.new() table, or nil
+local activeBtn     -- currently highlighted action button id
 local selectedCard  -- index into gs.hand, or nil
-local message     -- {text, ttl} for brief feedback messages
-local phase       -- "setup" | "action" | "draw" | "instability" | "gameover"
-local gameResult  -- "won" | "lost" + reason
+local message       -- {text, ttl} for brief feedback messages
+local phase         -- "profileselect"|"setup"|"action"|"gameover"
+local gameResult    -- "won" | "lost" + reason
+local profilesCache -- [slot] = profile_table_or_nil, used by profileselect
 
 -- ---------------------------------------------------------------------------
 -- Helpers
@@ -58,6 +62,9 @@ local function endAction()
     if result then
         phase      = "gameover"
         gameResult = {result = result, reason = reason}
+        AutoSave.finish()
+    else
+        AutoSave.save(gs)
     end
 end
 
@@ -70,24 +77,70 @@ local function advancePhase()
         Phases.runInstabilityPhase(gs)
         if gs.lost then endAction(); return end
         phase = "action"
-        gs.actionsRemaining  = Mod.actionsPerTurn(gs)
+        gs.actionsRemaining    = Mod.actionsPerTurn(gs)
         gs.coordinatorMoveUsed = false
         gs.turn = gs.turn + 1
     end
     endAction()
 end
 
-local function startGame(roleId)
+local function enterProfileSelect()
+    profilesCache = {}
+    for slot = 1, Save.SLOT_COUNT do
+        profilesCache[slot] = Save.loadProfile(slot)
+    end
+    phase      = "profileselect"
+    gs         = nil
+    modal      = nil
+    activeBtn  = nil
+    message    = nil
+    gameResult = nil
+end
+
+local function resumeGame(runData, slot, profile)
     Mod.clear()
-    gs = GameState.new({difficulty = "standard", role = roleId})
-    gs.actionsRemaining = Mod.actionsPerTurn(gs)
-    Roles.applyRole(gs, roleId)
+    gs = runData
+    Roles.applyRole(gs, gs.role)
+    AutoSave.init(slot, profile)
     phase      = "action"
     modal      = nil
     activeBtn  = nil
     message    = nil
     gameResult = nil
     Map.setMapHeight(LAYOUT.mapH)
+end
+
+local function startGame(roleId)
+    local slot    = AutoSave.getSlot()
+    local profile = AutoSave.getProfile()
+    Mod.clear()
+    gs = GameState.new({difficulty = "standard", role = roleId})
+    gs.actionsRemaining = Mod.actionsPerTurn(gs)
+    Roles.applyRole(gs, roleId)
+    if profile then profile.lastRole = roleId end
+    AutoSave.init(slot, profile)
+    AutoSave.save(gs)
+    phase      = "action"
+    modal      = nil
+    activeBtn  = nil
+    message    = nil
+    gameResult = nil
+    Map.setMapHeight(LAYOUT.mapH)
+end
+
+local function selectProfile(slot)
+    local profile = profilesCache[slot]
+    if not profile then
+        profile = Save.newProfile()
+        Save.saveProfile(slot, profile)
+        profilesCache[slot] = profile
+    end
+    if profile.activeRun then
+        resumeGame(profile.activeRun, slot, profile)
+    else
+        AutoSave.init(slot, profile)
+        phase = "setup"
+    end
 end
 
 -- ---------------------------------------------------------------------------
@@ -205,8 +258,19 @@ end
 -- ---------------------------------------------------------------------------
 function love.load()
     math.randomseed(os.time())
-    phase = "setup"
     Map.setMapHeight(LAYOUT.mapH)
+
+    -- Try to resume the last session automatically
+    local index = Save.loadIndex()
+    if index.lastUsed then
+        local profile = Save.loadProfile(index.lastUsed)
+        if profile and profile.activeRun then
+            resumeGame(profile.activeRun, index.lastUsed, profile)
+            return
+        end
+    end
+
+    enterProfileSelect()
 end
 
 function love.update(dt)
@@ -228,6 +292,12 @@ function love.draw()
     love.graphics.push()
     love.graphics.translate(ox, oy)
     love.graphics.scale(scale, scale)
+
+    if phase == "profileselect" then
+        ProfileSelect.render(profilesCache or {})
+        love.graphics.pop()
+        return
+    end
 
     if phase == "setup" then
         RoleSelect.render()
@@ -276,6 +346,22 @@ end
 
 function love.mousepressed(sx, sy, button)
     local vx, vy = toVirtual(sx, sy)
+
+    -- Profile selection screen
+    if phase == "profileselect" then
+        if button == 1 then
+            local hit = ProfileSelect.hit(vx, vy)
+            if hit then
+                if hit.action == "delete" and profilesCache[hit.slot] then
+                    Save.deleteProfile(hit.slot)
+                    profilesCache[hit.slot] = nil
+                elseif hit.action == "select" then
+                    selectProfile(hit.slot)
+                end
+            end
+        end
+        return
+    end
 
     -- Role selection screen
     if phase == "setup" then
@@ -337,7 +423,6 @@ end
 function love.keypressed(key)
     if key == "escape" then love.event.quit() end
     if key == "r" and phase == "gameover" then
-        phase = "setup"
-        gs    = nil
+        enterProfileSelect()
     end
 end
