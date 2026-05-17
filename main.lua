@@ -4,6 +4,7 @@ local Phases        = require("src.rules.phases")
 local WinLose       = require("src.rules.winLose")
 local Mod           = require("src.state.modifiers")
 local Roles         = require("src.rules.roles")
+local RunPrep       = require("src.rules.runPrep")
 local Save          = require("src.persistence.save")
 local AutoSave      = require("src.persistence.autosave")
 
@@ -14,6 +15,7 @@ local Footer        = require("src.ui.footer")
 local Modals        = require("src.ui.modals")
 local RoleSelect    = require("src.ui.roleSelect")
 local ProfileSelect = require("src.ui.profileSelect")
+local MetaShop      = require("src.ui.metaShop")
 
 -- ---------------------------------------------------------------------------
 -- Layout (virtual 1280×720)
@@ -36,9 +38,11 @@ local modal         -- active Modals.new() table, or nil
 local activeBtn     -- currently highlighted action button id
 local selectedCard  -- index into gs.hand, or nil
 local message       -- {text, ttl} for brief feedback messages
-local phase         -- "profileselect"|"setup"|"action"|"gameover"
+local phase         -- "profileselect"|"setup"|"shop"|"action"|"gameover"
 local gameResult    -- "won" | "lost" + reason
 local profilesCache -- [slot] = profile_table_or_nil, used by profileselect
+local selectedRole  -- role id chosen on role-select screen, held until shop commits
+local shopState     -- pending shop selections {bonusSelections, deckSelections, challengeModIds}
 
 -- ---------------------------------------------------------------------------
 -- Helpers
@@ -60,8 +64,14 @@ local function endAction()
     modal        = nil
     local result, reason = WinLose.checkWinLose(gs)
     if result then
-        phase      = "gameover"
-        gameResult = {result = result, reason = reason}
+        phase = "gameover"
+        local earnedRP = RunPrep.computeRP(gs, gs.challengeModIds or {})
+        local profile  = AutoSave.getProfile()
+        if profile then
+            profile.rpBalance = (profile.rpBalance or 0) + earnedRP
+            Save.saveProfile(AutoSave.getSlot(), profile)
+        end
+        gameResult = {result = result, reason = reason, earnedRP = earnedRP}
         AutoSave.finish()
     else
         AutoSave.save(gs)
@@ -79,6 +89,9 @@ local function advancePhase()
         phase = "action"
         gs.actionsRemaining    = Mod.actionsPerTurn(gs)
         gs.coordinatorMoveUsed = false
+        if (gs.teleportBannedTurns or 0) > 0 then
+            gs.teleportBannedTurns = gs.teleportBannedTurns - 1
+        end
         gs.turn = gs.turn + 1
     end
     endAction()
@@ -101,6 +114,7 @@ local function resumeGame(runData, slot, profile)
     Mod.clear()
     gs = runData
     Roles.applyRole(gs, gs.role)
+    RunPrep.applyModifiers(RunPrep.prepOpts(profile or Save.newProfile(), gs.role))
     AutoSave.init(slot, profile)
     phase      = "action"
     modal      = nil
@@ -114,9 +128,12 @@ local function startGame(roleId)
     local slot    = AutoSave.getSlot()
     local profile = AutoSave.getProfile()
     Mod.clear()
-    gs = GameState.new({difficulty = "standard", role = roleId})
-    gs.actionsRemaining = Mod.actionsPerTurn(gs)
+    local opts = RunPrep.prepOpts(profile or Save.newProfile(), roleId)
+    opts.difficulty = opts.difficulty or "standard"
+    gs = GameState.new(opts)
     Roles.applyRole(gs, roleId)
+    RunPrep.applyModifiers(opts)
+    gs.actionsRemaining = Mod.actionsPerTurn(gs)
     if profile then profile.lastRole = roleId end
     AutoSave.init(slot, profile)
     AutoSave.save(gs)
@@ -126,6 +143,34 @@ local function startGame(roleId)
     message    = nil
     gameResult = nil
     Map.setMapHeight(LAYOUT.mapH)
+end
+
+local function enterShop(roleId)
+    selectedRole = roleId
+    local profile = AutoSave.getProfile()
+    shopState = {bonusSelections = {}, deckSelections = {}, challengeModIds = {}}
+    if profile then
+        for k, v in pairs(profile.bonusSelections or {}) do shopState.bonusSelections[k] = v end
+        for k, v in pairs(profile.deckSelections  or {}) do shopState.deckSelections[k]  = v end
+        for _, v in ipairs(profile.challengeModIds or {}) do
+            shopState.challengeModIds[#shopState.challengeModIds + 1] = v
+        end
+    end
+    phase = "shop"
+end
+
+local function commitShop()
+    local profile = AutoSave.getProfile()
+    local cost = RunPrep.totalCost(shopState.bonusSelections, shopState.deckSelections)
+    if not profile or cost > profile.rpBalance then
+        showMsg("Not enough RP"); return
+    end
+    profile.bonusSelections = shopState.bonusSelections
+    profile.deckSelections  = shopState.deckSelections
+    profile.challengeModIds = shopState.challengeModIds
+    profile.rpBalance = profile.rpBalance - cost
+    Save.saveProfile(AutoSave.getSlot(), profile)
+    startGame(selectedRole)
 end
 
 local function selectProfile(slot)
@@ -316,6 +361,13 @@ function love.draw()
         return
     end
 
+    if phase == "shop" then
+        local profile = AutoSave.getProfile()
+        MetaShop.render(shopState, profile and profile.rpBalance or 0)
+        love.graphics.pop()
+        return
+    end
+
     Map.render(gs)
     UIActions.render(LAYOUT.actY, LAYOUT.actH, activeBtn, gs)
     Hand.render(gs, LAYOUT.handY, selectedCard)
@@ -339,12 +391,15 @@ function love.draw()
         love.graphics.rectangle("fill", 0, 0, VIRTUAL_W, VIRTUAL_H)
         local won = gameResult.result == "won"
         love.graphics.setColor(won and 0.2 or 0.8, won and 0.8 or 0.2, 0.2)
-        local title = won and "VICTORY" or "DEFEAT"
-        love.graphics.printf(title, 0, 290, VIRTUAL_W, "center")
+        love.graphics.printf(won and "VICTORY" or "DEFEAT", 0, 278, VIRTUAL_W, "center")
         love.graphics.setColor(0.9, 0.9, 0.9)
-        love.graphics.printf(gameResult.reason or "", 0, 340, VIRTUAL_W, "center")
+        love.graphics.printf(gameResult.reason or "", 0, 326, VIRTUAL_W, "center")
+        if gameResult.earnedRP then
+            love.graphics.setColor(0.90, 0.82, 0.30)
+            love.graphics.printf("+" .. gameResult.earnedRP .. " RP earned", 0, 356, VIRTUAL_W, "center")
+        end
         love.graphics.setColor(0.6, 0.6, 0.65)
-        love.graphics.printf("Press R to restart", 0, 380, VIRTUAL_W, "center")
+        love.graphics.printf("Press R to restart", 0, 396, VIRTUAL_W, "center")
     end
 
     -- Actions remaining indicator
@@ -379,7 +434,46 @@ function love.mousepressed(sx, sy, button)
     if phase == "setup" then
         if button == 1 then
             local roleId = RoleSelect.hit(vx, vy)
-            if roleId then startGame(roleId) end
+            if roleId then enterShop(roleId) end
+        end
+        return
+    end
+
+    -- Shop screen
+    if phase == "shop" then
+        if button == 1 then
+            local profile = AutoSave.getProfile()
+            local action  = MetaShop.hit(vx, vy, shopState, profile and profile.rpBalance or 0)
+            if action then
+                if action.type == "start" then
+                    commitShop()
+                elseif action.type == "increment" then
+                    if action.stype == "bonus" then
+                        shopState.bonusSelections[action.id] = (shopState.bonusSelections[action.id] or 0) + 1
+                    elseif action.stype == "deck" then
+                        shopState.deckSelections[action.id] = (shopState.deckSelections[action.id] or 0) + 1
+                    end
+                elseif action.type == "decrement" then
+                    if action.stype == "bonus" then
+                        local cur = shopState.bonusSelections[action.id] or 0
+                        if cur > 0 then shopState.bonusSelections[action.id] = cur - 1 end
+                    elseif action.stype == "deck" then
+                        local cur = shopState.deckSelections[action.id] or 0
+                        if cur > 0 then shopState.deckSelections[action.id] = cur - 1 end
+                    end
+                elseif action.type == "toggle" then
+                    local found = false
+                    for i, mid in ipairs(shopState.challengeModIds) do
+                        if mid == action.id then
+                            table.remove(shopState.challengeModIds, i)
+                            found = true; break
+                        end
+                    end
+                    if not found then
+                        shopState.challengeModIds[#shopState.challengeModIds + 1] = action.id
+                    end
+                end
+            end
         end
         return
     end

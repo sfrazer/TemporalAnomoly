@@ -9,12 +9,20 @@ function M.resolveChronologicalFlux(state)
         state.instabilityIndex = state.instabilityIndex + 1
     end
 
-    local card = util.drawBottom(state.threatDeck)
-    if card then
-        state.threatDiscard[#state.threatDiscard + 1] = card
-        Mod.onChronologicalFlux(state, {card = card})
-        if not state.repaired[card.color] then
-            explosion.placeCubesAt(state, card.city, card.period, card.color, 3)
+    local citiesToSeed = 1
+    if state.volatileAnomalyActive then
+        citiesToSeed = 3
+        state.volatileAnomalyActive = false
+    end
+
+    for _ = 1, citiesToSeed do
+        local card = util.drawBottom(state.threatDeck)
+        if card then
+            state.threatDiscard[#state.threatDiscard + 1] = card
+            Mod.onChronologicalFlux(state, {card = card})
+            if card.type == "threat" and not state.repaired[card.color] then
+                explosion.placeCubesAt(state, card.city, card.period, card.color, 3)
+            end
         end
     end
 

@@ -66,6 +66,9 @@ function M.tryTravel(state, destCity, destPeriod)
 end
 
 function M.tryTeleport(state, cardCity, cardPeriod)
+    if (state.teleportBannedTurns or 0) > 0 then
+        return false, "Teleport actions disabled (Temporal Ban)"
+    end
     local removed = takeFromHand(state.hand, function(c)
         return c.type == "city" and c.city == cardCity and c.period == cardPeriod
     end)
@@ -80,6 +83,9 @@ function M.tryTeleport(state, cardCity, cardPeriod)
 end
 
 function M.tryTeleportAlt(state, destCity, destPeriod)
+    if (state.teleportBannedTurns or 0) > 0 then
+        return false, "Teleport actions disabled (Temporal Ban)"
+    end
     local removed = takeFromHand(state.hand, function(c)
         return c.type == "city"
             and c.city   == state.currentCity

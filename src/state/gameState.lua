@@ -70,61 +70,86 @@ local function buildThreatDeck()
     return util.shuffle(deck)
 end
 
--- Seed 6 threat cards (3/3/2/2/1/1 cubes) directly without explosion logic;
--- cube counts never reach 4 during seeding so this is safe.
-local function seedThreats(state)
-    for _, n in ipairs({3, 3, 2, 2, 1, 1}) do
+-- Seed threat cards (3/3/2/2/1/1 cubes). skipCount skips the first N
+-- (heaviest) seedings; cube counts never reach 4 so explosion logic is skipped.
+local function seedThreats(state, skipCount)
+    local seedings = {3, 3, 2, 2, 1, 1}
+    for i = 1 + (skipCount or 0), #seedings do
         local card = util.drawTop(state.threatDeck)
         if card then
             state.threatDiscard[#state.threatDiscard + 1] = card
             state.cubes[card.city][card.period][card.color] =
-                state.cubes[card.city][card.period][card.color] + n
+                state.cubes[card.city][card.period][card.color] + seedings[i]
         end
     end
 end
 
 function M.new(opts)
     opts = opts or {}
-    local difficulty  = opts.difficulty  or "standard"
-    local startCity   = opts.startCity   or "atlanta"
-    local startPeriod = opts.startPeriod or "modern"
-    local handSize    = opts.handSize    or 4
-    local role        = opts.role        or "chronologist"
+    local difficulty       = opts.difficulty       or "standard"
+    local startCity        = opts.startCity        or "atlanta"
+    local startPeriod      = opts.startPeriod      or "modern"
+    local handSize         = opts.handSize         or 4
+    local role             = opts.role             or "chronologist"
+    local startingOutpost  = opts.startingOutpost  or false
+    local skipSeedingCount = opts.skipSeedingCount or 0
+    local removeFluxCount  = opts.removeFluxCount  or 0
+    local extraDeckCards   = opts.extraDeckCards   or {}
+    local challengeModIds  = opts.challengeModIds  or {}
 
     local baseDeck = buildBaseDeck()
+    for _, card in ipairs(extraDeckCards) do
+        baseDeck[#baseDeck + 1] = card
+    end
+    util.shuffle(baseDeck)
 
-    -- Deal starting hand before flux cards are mixed in
     local hand = {}
     for _ = 1, handSize do
         local card = util.drawTop(baseDeck)
         if card then hand[#hand + 1] = card end
     end
 
+    local fluxCount  = math.max(1, (FLUX_COUNT[difficulty] or 5) - removeFluxCount)
+    local threatDeck = buildThreatDeck()
+
     local state = {
-        currentCity      = startCity,
-        currentPeriod    = startPeriod,
-        playerDeck       = distributeFlux(baseDeck, FLUX_COUNT[difficulty]),
-        playerDiscard    = {},
-        hand             = hand,
-        threatDeck       = buildThreatDeck(),
-        threatDiscard    = {},
-        cubes            = buildCubeTable(),
-        outposts         = {},
-        instabilityIndex = 1,
-        explosionCount   = 0,
-        actionsRemaining = 4,
-        turn             = 1,
-        phase            = "action",
-        resolved         = {blue = false, yellow = false, black = false, red = false},
-        repaired         = {blue = false, yellow = false, black = false, red = false},
-        difficulty           = difficulty,
-        priorityCity         = nil,
-        lost                 = nil,
-        role                 = role,
-        coordinatorMoveUsed  = false,
+        currentCity           = startCity,
+        currentPeriod         = startPeriod,
+        playerDeck            = distributeFlux(baseDeck, fluxCount),
+        playerDiscard         = {},
+        hand                  = hand,
+        threatDeck            = threatDeck,
+        threatDiscard         = {},
+        cubes                 = buildCubeTable(),
+        outposts              = {},
+        instabilityIndex      = 1,
+        explosionCount        = 0,
+        actionsRemaining      = 4,
+        turn                  = 1,
+        phase                 = "action",
+        resolved              = {blue = false, yellow = false, black = false, red = false},
+        repaired              = {blue = false, yellow = false, black = false, red = false},
+        difficulty            = difficulty,
+        priorityCity          = nil,
+        lost                  = nil,
+        role                  = role,
+        coordinatorMoveUsed   = false,
+        challengeModIds       = challengeModIds,
+        teleportBannedTurns   = 0,
+        volatileAnomalyActive = false,
     }
 
-    seedThreats(state)
+    if startingOutpost then
+        state.outposts[startCity] = true
+    end
+
+    -- Seed threats before adding challenge mod cards so mods never get drawn during seeding
+    seedThreats(state, skipSeedingCount)
+
+    for _, modId in ipairs(challengeModIds) do
+        state.threatDeck[#state.threatDeck + 1] = {type = "challengemod", id = modId}
+    end
+    if #challengeModIds > 0 then util.shuffle(state.threatDeck) end
 
     if difficulty == "legendary" then
         state.priorityCity = cities[math.random(#cities)].id
