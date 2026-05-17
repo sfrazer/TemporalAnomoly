@@ -7,6 +7,8 @@
 --
 -- Call Mod.clear() between test cases to reset all handlers.
 
+local unpack = table.unpack or unpack  -- LuaJIT (Love2D) vs Lua 5.2+
+
 local M = {}
 
 local handlers = {}
@@ -101,6 +103,10 @@ end
 
 function M.onTemporalExplosion(state, ctx)
     fire("onTemporalExplosion", state, ctx)
+end
+
+function M.onArrive(state, ctx)
+    fire("onArrive", state, ctx)
 end
 
 return M

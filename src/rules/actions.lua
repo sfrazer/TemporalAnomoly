@@ -46,6 +46,7 @@ function M.tryTravel(state, destCity, destPeriod)
             return false, "no Temporal Outpost in " .. state.currentCity
         end
         state.currentPeriod = destPeriod
+        Mod.onArrive(state, {city = state.currentCity, period = state.currentPeriod})
         return true
     end
 
@@ -56,6 +57,7 @@ function M.tryTravel(state, destCity, destPeriod)
     for _, nid in ipairs(cityById[state.currentCity].adjacent) do
         if nid == destCity then
             state.currentCity = destCity
+            Mod.onArrive(state, {city = state.currentCity, period = state.currentPeriod})
             return true
         end
     end
@@ -73,6 +75,7 @@ function M.tryTeleport(state, cardCity, cardPeriod)
     state.playerDiscard[#state.playerDiscard + 1] = removed[1]
     state.currentCity   = cardCity
     state.currentPeriod = cardPeriod
+    Mod.onArrive(state, {city = state.currentCity, period = state.currentPeriod})
     return true
 end
 
@@ -88,6 +91,7 @@ function M.tryTeleportAlt(state, destCity, destPeriod)
     state.playerDiscard[#state.playerDiscard + 1] = removed[1]
     state.currentCity   = destCity
     state.currentPeriod = destPeriod
+    Mod.onArrive(state, {city = state.currentCity, period = state.currentPeriod})
     return true
 end
 
@@ -145,6 +149,25 @@ function M.tryResolve(state, color)
     end
     state.resolved[color] = true
     util.updateRepaired(state)
+    return true
+end
+
+function M.tryCoordinatorMove(state, destCity)
+    if state.role ~= "coordinator" then
+        return false, "not the Coordinator role"
+    end
+    if state.coordinatorMoveUsed then
+        return false, "Coordinator free move already used this turn"
+    end
+    if not state.outposts[destCity] then
+        return false, destCity .. " has no Temporal Outpost"
+    end
+    if destCity == state.currentCity then
+        return false, "already in " .. destCity
+    end
+    state.currentCity        = destCity
+    state.coordinatorMoveUsed = true
+    Mod.onArrive(state, {city = state.currentCity, period = state.currentPeriod})
     return true
 end
 

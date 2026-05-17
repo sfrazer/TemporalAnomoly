@@ -3,12 +3,14 @@ local Actions    = require("src.rules.actions")
 local Phases     = require("src.rules.phases")
 local WinLose    = require("src.rules.winLose")
 local Mod        = require("src.state.modifiers")
+local Roles      = require("src.rules.roles")
 
 local Map        = require("src.ui.map")
 local Hand       = require("src.ui.hand")
 local UIActions  = require("src.ui.actions")
 local Footer     = require("src.ui.footer")
 local Modals     = require("src.ui.modals")
+local RoleSelect = require("src.ui.roleSelect")
 
 -- ---------------------------------------------------------------------------
 -- Layout (virtual 1280×720)
@@ -31,7 +33,7 @@ local modal       -- active Modals.new() table, or nil
 local activeBtn   -- currently highlighted action button id
 local selectedCard  -- index into gs.hand, or nil
 local message     -- {text, ttl} for brief feedback messages
-local phase       -- "action" | "draw" | "instability" | "gameover"
+local phase       -- "setup" | "action" | "draw" | "instability" | "gameover"
 local gameResult  -- "won" | "lost" + reason
 
 -- ---------------------------------------------------------------------------
@@ -68,10 +70,24 @@ local function advancePhase()
         Phases.runInstabilityPhase(gs)
         if gs.lost then endAction(); return end
         phase = "action"
-        gs.actionsRemaining = Mod.actionsPerTurn(gs)
+        gs.actionsRemaining  = Mod.actionsPerTurn(gs)
+        gs.coordinatorMoveUsed = false
         gs.turn = gs.turn + 1
     end
     endAction()
+end
+
+local function startGame(roleId)
+    Mod.clear()
+    gs = GameState.new({difficulty = "standard", role = roleId})
+    gs.actionsRemaining = Mod.actionsPerTurn(gs)
+    Roles.applyRole(gs, roleId)
+    phase      = "action"
+    modal      = nil
+    activeBtn  = nil
+    message    = nil
+    gameResult = nil
+    Map.setMapHeight(LAYOUT.mapH)
 end
 
 -- ---------------------------------------------------------------------------
@@ -150,6 +166,11 @@ local function handleButtonClick(id)
         return
     end
 
+    if id == "coordinator_move" then
+        showMsg("Click a city with a Temporal Outpost to move there for free")
+        return
+    end
+
     if id == "teleport_alt" then
         modal = Modals.new("Discard current-city card and go where?", cityItems, function(destCity)
             modal = Modals.new("Which time period?", PERIOD_ITEMS, function(destPeriod)
@@ -168,6 +189,14 @@ local function handleMapClick(vx, vy)
         spendAction(function() return Actions.tryTravel(gs, hit.city, hit.period) end)
     elseif activeBtn == "teleport" then
         spendAction(function() return Actions.tryTeleport(gs, hit.city, hit.period) end)
+    elseif activeBtn == "coordinator_move" then
+        local ok, err = Actions.tryCoordinatorMove(gs, hit.city)
+        if ok then
+            endAction()
+        else
+            showMsg(err or "Cannot move there")
+            activeBtn = nil
+        end
     end
 end
 
@@ -176,9 +205,7 @@ end
 -- ---------------------------------------------------------------------------
 function love.load()
     math.randomseed(os.time())
-    gs                  = GameState.new({difficulty = "standard"})
-    gs.actionsRemaining = Mod.actionsPerTurn(gs)
-    phase               = "action"
+    phase = "setup"
     Map.setMapHeight(LAYOUT.mapH)
 end
 
@@ -202,8 +229,14 @@ function love.draw()
     love.graphics.translate(ox, oy)
     love.graphics.scale(scale, scale)
 
+    if phase == "setup" then
+        RoleSelect.render()
+        love.graphics.pop()
+        return
+    end
+
     Map.render(gs)
-    UIActions.render(LAYOUT.actY, LAYOUT.actH, activeBtn)
+    UIActions.render(LAYOUT.actY, LAYOUT.actH, activeBtn, gs)
     Hand.render(gs, LAYOUT.handY, selectedCard)
     Footer.render(gs, LAYOUT.footerY, LAYOUT.footerH)
 
@@ -244,6 +277,15 @@ end
 function love.mousepressed(sx, sy, button)
     local vx, vy = toVirtual(sx, sy)
 
+    -- Role selection screen
+    if phase == "setup" then
+        if button == 1 then
+            local roleId = RoleSelect.hit(vx, vy)
+            if roleId then startGame(roleId) end
+        end
+        return
+    end
+
     -- Modal absorbs all clicks
     if modal then
         local value = Modals.click(modal, vx, vy)
@@ -264,7 +306,7 @@ function love.mousepressed(sx, sy, button)
     end
 
     if button == 1 then
-        local btnId = UIActions.hit(vx, vy, LAYOUT.actY, LAYOUT.actH)
+        local btnId = UIActions.hit(vx, vy, LAYOUT.actY, LAYOUT.actH, gs)
         if btnId then handleButtonClick(btnId); return end
 
         local cardIdx = Hand.hitCard(vx, vy, gs, LAYOUT.handY)
@@ -295,9 +337,7 @@ end
 function love.keypressed(key)
     if key == "escape" then love.event.quit() end
     if key == "r" and phase == "gameover" then
-        gs    = GameState.new({difficulty = "standard"})
-        gs.actionsRemaining = Mod.actionsPerTurn(gs)
-        phase = "action"
-        modal = nil; activeBtn = nil; message = nil; gameResult = nil
+        phase = "setup"
+        gs    = nil
     end
 end

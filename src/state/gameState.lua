@@ -89,6 +89,7 @@ function M.new(opts)
     local startCity   = opts.startCity   or "atlanta"
     local startPeriod = opts.startPeriod or "modern"
     local handSize    = opts.handSize    or 4
+    local role        = opts.role        or "chronologist"
 
     local baseDeck = buildBaseDeck()
 
@@ -116,9 +117,11 @@ function M.new(opts)
         phase            = "action",
         resolved         = {blue = false, yellow = false, black = false, red = false},
         repaired         = {blue = false, yellow = false, black = false, red = false},
-        difficulty       = difficulty,
-        priorityCity     = nil,
-        lost             = nil,
+        difficulty           = difficulty,
+        priorityCity         = nil,
+        lost                 = nil,
+        role                 = role,
+        coordinatorMoveUsed  = false,
     }
 
     seedThreats(state)
