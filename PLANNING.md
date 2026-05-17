@@ -131,10 +131,10 @@ These are implemented through a central `Modifiers` module (see *Architecture*) 
 Free to play anytime on your turn (between actions, or between phases). Do not consume an action. Cannot interrupt a Chronological Flux mid-resolution.
 
 **Base event cards** (shuffled into the player deck at run start):
-- *One Quiet Night* — skip the next Instability Phase
-- *Government Grant* — place a Temporal Outpost in any city, no discard required
+- *Paradox Barrier* — skip the next Instability Phase
+- *Unknown Assistance* — place a Temporal Outpost in any city, no discard required
 - *Temporal Slip* — move to any (city, period) for free
-- *Resilient Population* — remove 1 card from the threat discard pile so it doesn't return on reshuffle
+- *Chrono Lock* — remove 1 card from the threat discard pile so it doesn't return on reshuffle
 
 ### Chronological Flux resolution
 
@@ -219,7 +219,7 @@ When a (city, period, color) node would receive a 4th cube it suffers a Temporal
 
 ### Player deck
 - 48 city cards (2 per (city, period) — 6 cities × 4 periods × 2 copies)
-- 4 base event cards: *One Quiet Night*, *Government Grant*, *Temporal Slip*, *Resilient Population*
+- 4 base event cards: *Paradox Barrier*, *Unknown Assistance*, *Temporal Slip*, *Chrono Lock*
 - N Chronological Flux cards evenly distributed through shuffled city + event cards (N = difficulty's Chronological Flux count)
 
 ### Starting hand
@@ -244,11 +244,11 @@ RP is a **permanent pool** — it only ever grows (earned after each run). In th
 
 | Card | Cost | Effect |
 |---|---|---|
-| Stabilizer Cache | 3 RP | Clear all cubes of 1 color in current city |
-| Mobile Outpost | 4 RP | Build a Temporal Outpost in current city without discarding |
-| Emergency Protocol | 5 RP | +2 actions this turn |
+| Chronological Rewind | 3 RP | Clear all cubes of 1 color across all periods of current city |
+| Mobile Outpost | 4 RP | *(undefined — to be designed)* |
+| Time Corridor | 5 RP | +2 actions this turn |
 | Temporal Seal | 4 RP | Prevent all incidents in 1 city for 1 round |
-| Supply Drop | 3 RP | Restore 3 cubes to any depleted anomaly supply |
+| Supply Drop | 3 RP | *(undefined — to be designed)* |
 
 Max 2 copies of each. Cards shuffle into player deck at run start.
 
@@ -412,8 +412,7 @@ Test after each change by running `busted` from the root of the project.
 
 - Scripted tutorial
 - Final art (use placeholder shapes during development: circles for cubes, rounded rects for cities, colored borders for periods)
-- Sound effects and music
-- Animations beyond minimal feedback
+- Full audio (Phase 10E adds stubs; real assets can be dropped in without code changes)
 - Localization
 - Telemetry
 
@@ -513,20 +512,30 @@ Named audio hook points, all silent, ready for real assets.
 - `src/audio/sounds.lua` — one function per event (`Sounds.cubePlaced`, `Sounds.explosion`, `Sounds.flux`, `Sounds.win`, `Sounds.lose`, `Sounds.buttonClick`); each is a no-op until an asset is loaded.
 - Called at the same sites as animation hooks; real `.ogg` files can be dropped into `assets/audio/` and loaded by name without touching call sites.
 
-### Phase 11 — Event card effects
-Clicking a selected event card triggers its effect immediately (no action cost). The card is discarded afterward. Cannot be played during Chronological Flux resolution.
+### Phase 11 — Playable Cards from Hand ✓ Done
+Wire up all cards that should be playable from the hand. Interaction model: first click selects, second click on the same card plays it. Play is only allowed during `phase == "action"`.
 
-- *One Quiet Night* — set `gs.skipNextInstability = true`; respected by `Phases.runInstabilityPhase` (skips and clears the flag).
-- *Government Grant* — city picker modal → place Temporal Outpost in chosen city, no card discard required.
-- *Temporal Slip* — city picker modal → period picker modal → move player to chosen (city, period) for free; fires `Mod.onArrive`.
-- *Resilient Population* — picker modal listing the threat discard pile → permanently remove the chosen card (spliced out so it never returns on reshuffle).
+**Card IDs and names:**
 
-**Implementation touchpoints:**
-- `src/state/gameState.lua` — add `skipNextInstability = false` to initial state.
-- `src/rules/actions.lua` — add `tryPlayEvent(state, card)` dispatcher that routes to per-event logic and returns `(true, discardedCard)` or `(false, err)`.
-- `src/rules/phases.lua` — `runInstabilityPhase` checks and clears `gs.skipNextInstability` before running.
-- `main.lua` — in `love.mousepressed`, when a card click lands on an already-selected event card, call `tryPlayEvent`; multi-step events (Government Grant, Temporal Slip, Resilient Population) open chained modals before resolving.
-- `tests/events.spec.lua` — unit tests for all four effects including edge cases (no threat discard for Resilient Population, outpost already exists for Government Grant).
+| ID | Display Name | Type | Effect |
+|---|---|---|---|
+| `paradox_barrier` | Paradox Barrier | base event | Set `gs.skipNextInstability = true` — next Instability Phase is skipped |
+| `unknown_assistance` | Unknown Assistance | base event | City picker → place Temporal Outpost in chosen city; no card discard |
+| `temporal_slip` | Temporal Slip | base event | City picker → period picker → move player to chosen (city, period) for free; fires `Mod.onArrive` |
+| `chrono_lock` | Chrono Lock | base event | Picker from threat discard list → permanently remove chosen card (never returns on reshuffle) |
+| `chronological_rewind` | Chronological Rewind | deck upgrade | Color picker → clear all cubes of that color from every period of current city |
+| `mobile_outpost` | Mobile Outpost | deck upgrade | *(undefined — stub only; shows "Not yet implemented")* |
+| `time_corridor` | Time Corridor | deck upgrade | `gs.actionsRemaining += 2` |
+| `temporal_seal` | Temporal Seal | deck upgrade | City picker → prevent all cube placements in chosen city until next Instability Phase ends |
+| `supply_drop` | Supply Drop | deck upgrade | *(undefined — stub only; shows "Not yet implemented")* |
+
+- `data/cards.lua`, `data/shop.lua` — renamed all card IDs and display names to new scheme.
+- `src/state/gameState.lua` — added `skipNextInstability = false` and `sealedCity = nil` to initial state.
+- `src/rules/actions.lua` — `tryPlayCard(state, cardIdx, arg1, arg2)` dispatcher + 7 implemented helpers + 2 stubs; discard handled in dispatcher on success.
+- `src/rules/phases.lua` — `runInstabilityPhase` checks and clears `state.skipNextInstability` before running.
+- `src/state/modifiers.lua` — bug fix: `permit()` was calling `table.unpack` directly instead of the local `unpack` alias, crashing when any `canPlaceCube` handler was registered.
+- `main.lua` — `handleCardPlay` (with modal chains per card); `canPlaceCube` hook in `initAnims` enforces `sealedCity`; `gs.sealedCity = nil` cleared after instability; mousepressed uses second-click-to-play for event cards.
+- `tests/events.spec.lua` — 16 new tests covering all 7 implemented effects and both stubs; 233 total passing.
 
 ### Cross-cutting / always-on
 - New code ships with Busted tests in `tests/`; `busted` is green before any UI work merges.

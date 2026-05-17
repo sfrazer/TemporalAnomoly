@@ -35,7 +35,7 @@ end
 local function permit(hook, state, ...)
     local args = {...}
     for _, fn in ipairs(handlers[hook] or {}) do
-        if fn(state, table.unpack(args)) == false then
+        if fn(state, unpack(args)) == false then
             return false
         end
     end

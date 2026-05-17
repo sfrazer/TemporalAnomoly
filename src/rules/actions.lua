@@ -169,6 +169,106 @@ function M.tryResolve(state, color)
     return true
 end
 
+-- ---------------------------------------------------------------------------
+-- Card play helpers
+-- ---------------------------------------------------------------------------
+
+local function discardCard(state, cardIdx, card)
+    table.remove(state.hand, cardIdx)
+    state.playerDiscard[#state.playerDiscard + 1] = card
+end
+
+function M.playParadoxBarrier(state)
+    state.skipNextInstability = true
+    return true
+end
+
+function M.playUnknownAssistance(state, cityId)
+    if state.outposts[cityId] then
+        return false, "Temporal Outpost already exists there"
+    end
+    state.outposts[cityId] = true
+    return true
+end
+
+function M.playTemporalSlip(state, cityId, periodId)
+    state.currentCity   = cityId
+    state.currentPeriod = periodId
+    Mod.onArrive(state, {city = cityId, period = periodId})
+    return true
+end
+
+function M.playChronoLock(state, threatIdx)
+    if #state.threatDiscard == 0 then
+        return false, "Threat discard is empty"
+    end
+    table.remove(state.threatDiscard, threatIdx)
+    return true
+end
+
+function M.playChronologicalRewind(state, color)
+    local cityId = state.currentCity
+    for _, pid in ipairs(PERIOD_IDS) do
+        state.cubes[cityId][pid][color] = 0
+    end
+    util.updateRepaired(state)
+    return true
+end
+
+function M.playTimeCorridor(state)
+    state.actionsRemaining = state.actionsRemaining + 2
+    return true
+end
+
+function M.playTemporalSeal(state, cityId)
+    state.sealedCity = cityId
+    return true
+end
+
+function M.playMobileOutpost(state)
+    return false, "Not yet implemented"
+end
+
+function M.playSupplyDrop(state)
+    return false, "Not yet implemented"
+end
+
+-- Routes a card play by card.id. For cards needing modal input, arg1/arg2
+-- are the already-resolved choices passed by main.lua after modal resolution.
+-- Returns (ok, err); on success, card is spliced from hand and moved to discard.
+function M.tryPlayCard(state, cardIdx, arg1, arg2)
+    local card = state.hand[cardIdx]
+    if not card then return false, "invalid card index" end
+
+    local ok, err
+    local id = card.id
+
+    if id == "paradox_barrier" then
+        ok, err = M.playParadoxBarrier(state)
+    elseif id == "unknown_assistance" then
+        ok, err = M.playUnknownAssistance(state, arg1)
+    elseif id == "temporal_slip" then
+        ok, err = M.playTemporalSlip(state, arg1, arg2)
+    elseif id == "chrono_lock" then
+        ok, err = M.playChronoLock(state, arg1)
+    elseif id == "chronological_rewind" then
+        ok, err = M.playChronologicalRewind(state, arg1)
+    elseif id == "mobile_outpost" then
+        ok, err = M.playMobileOutpost(state)
+    elseif id == "time_corridor" then
+        ok, err = M.playTimeCorridor(state)
+    elseif id == "temporal_seal" then
+        ok, err = M.playTemporalSeal(state, arg1)
+    elseif id == "supply_drop" then
+        ok, err = M.playSupplyDrop(state)
+    else
+        return false, "no effect for card: " .. (id or "?")
+    end
+
+    if ok then discardCard(state, cardIdx, card) end
+    return ok, err
+end
+
 function M.tryCoordinatorMove(state, destCity)
     if state.role ~= "coordinator" then
         return false, "not the Coordinator role"

@@ -61,6 +61,10 @@ function M.runDrawPhase(state)
 end
 
 function M.runInstabilityPhase(state)
+    if state.skipNextInstability then
+        state.skipNextInstability = false
+        return
+    end
     local n = util.instabilityLevel(state)
     for _ = 1, n do
         if state.lost then return end

@@ -38,6 +38,8 @@ function H.makeState(overrides)
         challengeModIds       = {},
         teleportBannedTurns   = 0,
         volatileAnomalyActive = false,
+        skipNextInstability   = false,
+        sealedCity            = nil,
     }
     if overrides then
         for k, v in pairs(overrides) do state[k] = v end

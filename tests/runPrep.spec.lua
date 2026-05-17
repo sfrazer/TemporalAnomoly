@@ -86,8 +86,8 @@ describe("RunPrep", function()
         end)
 
         it("costs for deck cards", function()
-            assert.equal(3, RunPrep.totalCost({}, {stabilizer_cache = 1}))
-            assert.equal(6, RunPrep.totalCost({}, {stabilizer_cache = 2}))
+            assert.equal(3, RunPrep.totalCost({}, {chronological_rewind = 1}))
+            assert.equal(6, RunPrep.totalCost({}, {chronological_rewind = 2}))
         end)
 
         it("sums bonus and deck costs together", function()
@@ -141,7 +141,7 @@ describe("RunPrep", function()
 
         it("builds extraDeckCards from deckSelections", function()
             local opts = RunPrep.prepOpts(makeProfile({
-                deckSelections = {stabilizer_cache = 2, supply_drop = 1}
+                deckSelections = {chronological_rewind = 2, supply_drop = 1}
             }), "chronologist")
             assert.equal(3, #opts.extraDeckCards)
             assert.equal("event", opts.extraDeckCards[1].type)
@@ -201,7 +201,7 @@ describe("RunPrep", function()
 
         it("adds extra deck cards into player deck + hand pool", function()
             local opts = RunPrep.prepOpts(makeProfile({
-                deckSelections = {stabilizer_cache = 2, supply_drop = 1}
+                deckSelections = {chronological_rewind = 2, supply_drop = 1}
             }), "chronologist")
             local gs = GameState.new(opts)
             local eventCount = 0
