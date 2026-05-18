@@ -61,6 +61,7 @@ end
 
 function M.newProfile()
     return {
+        name              = "",
         rpBalance         = 0,
         roleUnlocks       = {},
         highestDifficulty = nil,
@@ -70,9 +71,10 @@ function M.newProfile()
         bonusSelections   = {},
         deckSelections    = {},
         challengeModIds   = {},
-        selectedDifficulty = "standard",
-        handSortMode           = "insertion",
-        instabilityStepDelay   = 5.0,
+        selectedDifficulty   = "standard",
+        handSortMode         = "insertion",
+        instabilityStepDelay = 5.0,
+        fullscreen           = false,
     }
 end
 

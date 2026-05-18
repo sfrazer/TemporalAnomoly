@@ -78,7 +78,7 @@ TemporalAnomaly/
 │   ├── cards.lua                 -- city cards (48), event cards (4), threat deck (24)
 │   ├── roles.lua                 -- 3 starter + 5 locked role definitions with unlockHints
 │   └── shop.lua                  -- starting bonuses, deck cards, challenge mod definitions
-├── tests/                        -- Busted specs (270 passing); mirrors src/ layout
+├── tests/                        -- Busted specs (276 passing); mirrors src/ layout
 │   ├── helpers.lua               -- makeState, cityCard, eventCard, fluxCard, threatCard
 │   ├── runPrep.spec.lua          -- computeRP, totalCost, prepOpts, GameState integration
 │   └── unlocks.spec.lua          -- evaluateUnlocks, applyUnlocks conditions
@@ -433,29 +433,6 @@ Open design threads:
 
 ---
 
-### Phase 18 — Main menu, profile names, options (medium)
-
-Wrap the run loop in a proper menu shell.
-
-- **Profile naming.** When creating a profile, prompt for a name (text input field, max ~16 chars). Store as `profile.name`. Files: `src/ui/profileSelect.lua`, `src/persistence/save.lua` (newProfile signature).
-- **Main menu screen.** New phase `"mainmenu"`. Buttons:
-  - **Resume Last Run** (enabled iff `profile.activeRun ~= nil`)
-  - **New Run** → goes to role select
-  - **Change Profile** → profile select; shows current profile name on the button face
-  - **Options**
-
-  Files: new `src/ui/mainMenu.lua`, wire into `main.lua` phase machine. Boot path becomes `profileselect → mainmenu` (instead of `profileselect → setup` straight into a run).
-- **Options screen.** New phase `"options"` (or modal overlay). Settings:
-  - Music on/off, music volume slider, SFX volume slider — persisted on profile (or global config file)
-  - Starting resolution dropdown (1280×720, 1600×900, 1920×1080, fullscreen)
-  - Quit Run (returns to main menu, abandons current run with confirm dialog)
-  - Exit Game (`love.event.quit()` with confirm)
-
-  Files: new `src/ui/options.lua`, audio hookups in `src/audio/sounds.lua` (volume globals + `love.audio.setVolume`), persistence in `save.lua`.
-- **Tests.** Profile naming round-trips through save/load; options persistence; main menu enable-state for Resume button.
-
----
-
 ### Phase 19 — Demo mode & itch.io web release (large)
 
 Packaging work; mostly outside the Lua codebase.
@@ -641,6 +618,18 @@ Implemented all 5 missing locked-role abilities. Also fixed a latent bug where `
 - `src/ui/footer.lua`, `src/ui/anim.lua`, `src/rules/phases.lua`, `src/persistence/save.lua`, `main.lua` — all modified
 - `Phases.applyChallengeModEffect` promoted from local to `M.applyChallengeModEffect` so `main.lua` can call it during step drain; `runInstabilityPhase` (used by `seed` console command) unchanged
 - 262 total passing (no new tests — all changes are UI/orchestration layer)
+
+### Phase 18 — Main menu, profile names, options ✓ Done
+
+Wrapped the run loop in a proper menu shell. Boot path: `profileselect → mainmenu` (instead of directly into role select).
+
+- `src/persistence/save.lua` — added `name = ""`, `fullscreen = false` to `newProfile()`
+- `src/ui/mainMenu.lua` — new file. 4 buttons: **Resume Last Run** (dimmed when no activeRun), **New Run**, **Change Profile**, **Options**. Shows profile name as subtitle.
+- `src/ui/options.lua` — new file. Settings: **Instability Delay** [<]/[>] slider (0.5 s–10.0 s, step 0.5), **Fullscreen** toggle (calls `love.window.setFullscreen`). Action buttons: **Back**, **Quit Run** (only when `profile.activeRun`, abandons run with confirm dialog), **Exit Game** (confirm dialog). All settings persisted to profile on change.
+- `src/ui/profileSelect.lua` — shows `profile.name` instead of "Profile N" when name is set.
+- `main.lua` — `namingState` overlay: clicking an empty profile slot shows a text-input box (max 16 chars); Enter confirms, Escape cancels. `optionsConfirm` flag gates "Yes/No" confirm dialogs for Quit Run / Exit Game. `selectProfile` routes through mainmenu instead of setup. `love.load` boots to mainmenu when a last-used profile has no active run. `love.textinput` and `love.keypressed` routed through naming overlay when active. Escape: dismisses confirm in options, returns to mainmenu from options.
+- Music/SFX volume sliders deferred — audio system is still all stubs.
+- `tests/save.spec.lua` — 5 new tests. 276 total passing.
 
 ### Phase 17 — New role: Chronomancer ✓ Done
 

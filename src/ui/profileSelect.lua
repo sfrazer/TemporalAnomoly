@@ -56,7 +56,8 @@ function M.render(profiles)
             love.graphics.rectangle("line", x, y, CARD_W, CARD_H, 6)
 
             love.graphics.setColor(0.88, 0.90, 0.95)
-            love.graphics.printf("Profile " .. slot, x + 10, y + 14, CARD_W - 20, "center")
+            local displayName = (profile.name and profile.name ~= "") and profile.name or ("Profile " .. slot)
+            love.graphics.printf(displayName, x + 10, y + 14, CARD_W - 20, "center")
 
             if profile.activeRun then
                 local run = profile.activeRun
