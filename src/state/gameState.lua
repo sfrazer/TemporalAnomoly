@@ -141,6 +141,8 @@ function M.new(opts)
         skipNextInstability   = false,
         sealedCity            = nil,
         failsafeDesignerUsed  = false,
+        chronomancerUsed      = false,
+        teleportsUsed         = 0,
     }
 
     if startingOutpost then

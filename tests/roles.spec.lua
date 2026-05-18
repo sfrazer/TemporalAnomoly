@@ -393,6 +393,56 @@ describe("Roles", function()
     end)
 
     -- -------------------------------------------------------------------------
+    describe("Chronomancer", function()
+        it("tryReorderThreats reorders the top N cards of the threat deck", function()
+            local state = H.makeState()
+            local c1 = H.threatCard("atlanta",     "modern",     "black")
+            local c2 = H.threatCard("houston",     "modern",     "black")
+            local c3 = H.threatCard("chicago",     "industrial", "yellow")
+            state.threatDeck = {c1, c2, c3}
+            local ok = Actions.tryReorderThreats(state, {c3, c1, c2})
+            assert.is_true(ok)
+            assert.equal(c3, state.threatDeck[1])
+            assert.equal(c1, state.threatDeck[2])
+            assert.equal(c2, state.threatDeck[3])
+        end)
+
+        it("sets chronomancerUsed after use", function()
+            local state = H.makeState()
+            local c = H.threatCard("atlanta", "modern", "black")
+            state.threatDeck = {c}
+            Actions.tryReorderThreats(state, {c})
+            assert.is_true(state.chronomancerUsed)
+        end)
+
+        it("fails on second use", function()
+            local state = H.makeState()
+            state.chronomancerUsed = true
+            local ok, err = Actions.tryReorderThreats(state, {})
+            assert.is_false(ok)
+            assert.not_nil(err)
+        end)
+
+        it("works on a deck shorter than 6", function()
+            local state = H.makeState()
+            local c = H.threatCard("seattle", "prehistory", "blue")
+            state.threatDeck = {c}
+            local ok = Actions.tryReorderThreats(state, {c})
+            assert.is_true(ok)
+            assert.equal(c, state.threatDeck[1])
+            assert.equal(1, #state.threatDeck)
+        end)
+
+        it("applyRole registers no passive modifier hooks", function()
+            local state = H.makeState()
+            Roles.applyRole(state, "chronomancer")
+            assert.is_true(Mod.canPlaceCube(state, "atlanta", "modern", "blue"))
+            assert.is_true(Mod.outpostCardRequired(state))
+            assert.equal(5, Mod.cardsToResolveAnomaly(state))
+        end)
+    end)
+
+    -- -------------------------------------------------------------------------
     describe("applyRole", function()
         it("does not error for an unknown role id", function()
             local state = H.makeState()

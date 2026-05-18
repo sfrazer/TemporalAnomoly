@@ -78,7 +78,7 @@ TemporalAnomaly/
 │   ├── cards.lua                 -- city cards (48), event cards (4), threat deck (24)
 │   ├── roles.lua                 -- 3 starter + 5 locked role definitions with unlockHints
 │   └── shop.lua                  -- starting bonuses, deck cards, challenge mod definitions
-├── tests/                        -- Busted specs (217 passing); mirrors src/ layout
+├── tests/                        -- Busted specs (270 passing); mirrors src/ layout
 │   ├── helpers.lua               -- makeState, cityCard, eventCard, fluxCard, threatCard
 │   ├── runPrep.spec.lua          -- computeRP, totalCost, prepOpts, GameState integration
 │   └── unlocks.spec.lua          -- evaluateUnlocks, applyUnlocks conditions
@@ -209,9 +209,10 @@ When a (city, period, color) node would receive a 4th cube it suffers a Temporal
 |---|---|---|
 | Temporal Isolationist | Win at Standard | Prevent cube placement in your current city and adjacent cities each turn |
 | Engineer | Win at Heroic | Build Temporal Outpost without discarding a card |
-| Researcher | Win at Heroic | Start with +1 card and a free Stabilizer Cache in deck |
+| Researcher | Win at Heroic | Start with +1 card and a free Chronological Rewind in deck |
 | Failsafe Designer | Win at Legendary | Retrieve 1 event card from player discard (once per run) |
 | Temporal Analyst | Win a run with no purchased deck upgrade cards | Spend an action to look at top 2 threat deck cards |
+| Chronomancer | Win at Heroic without using Teleport | Once per run: view top 6 threat cards and reorder them freely |
 
 ---
 
@@ -427,21 +428,8 @@ Test after each change by running `busted` from the root of the project.
 Open design threads:
 - *Mobile Outpost* card effect — currently a stub returning "Not yet implemented".
 - *Supply Drop* card effect — currently a stub returning "Not yet implemented".
-- *Chronomancer unlock condition* — TBD (see Phase 17).
 
 ---
-
----
-
-### Phase 17 — New role: Chronomancer (small)
-
-Locked role with an active deck-manipulation ability.
-
-- **Definition.** In `data/roles.lua`: id `chronomancer`, color (suggest cyan/teal), description "Once per run, look at the top 6 threat cards and reorder them.", and an `unlockHint`.
-- **Unlock condition.** Suggest: *win a Heroic run with no Teleport actions used* (mirrors Temporal Analyst's no-upgrade flavor — discipline-based). Track `gs.teleportsUsed = 0` / increment in `tryTeleport` + `tryTeleportAlt`. Add to `src/rules/unlocks.lua` and `data/roles.lua`. Open to alternative gating.
-- **Ability.** `APPLY.chronomancer = function(state) end` — no passive. State: `chronomancerUsed = false` on init. Button `reorder_threat` (free; not 1 action — design choice, document on tooltip), visible when role matches and not yet used.
-- **UI.** New modal that shows the top 6 of `gs.threatDeck` with arrow controls (or drag) to reorder; on confirm, write back to deck. Files: `src/ui/modals.lua` add a `Modals.newReorder(title, items, onConfirm)` variant, or build a one-off modal type.
-- **Tests.** `tests/roles.spec.lua` Chronomancer block: ability flips the deck order; second call fails; works on decks shorter than 6.
 
 ---
 
@@ -653,6 +641,22 @@ Implemented all 5 missing locked-role abilities. Also fixed a latent bug where `
 - `src/ui/footer.lua`, `src/ui/anim.lua`, `src/rules/phases.lua`, `src/persistence/save.lua`, `main.lua` — all modified
 - `Phases.applyChallengeModEffect` promoted from local to `M.applyChallengeModEffect` so `main.lua` can call it during step drain; `runInstabilityPhase` (used by `seed` console command) unchanged
 - 262 total passing (no new tests — all changes are UI/orchestration layer)
+
+### Phase 17 — New role: Chronomancer ✓ Done
+
+Locked role with an active deck-manipulation ability.
+
+- `data/roles.lua` — Chronomancer entry: cyan/teal color, unlock hint "Win at Heroic without Teleporting"
+- `src/state/gameState.lua` — added `chronomancerUsed = false` and `teleportsUsed = 0` to initial state
+- `src/rules/actions.lua` — `teleportsUsed` incremented in `tryTeleport` and `tryTeleportAlt`; added `tryReorderThreats(state, orderedCards)` — removes top N cards and re-inserts in player-specified order; sets `chronomancerUsed`
+- `src/rules/roles.lua` — `APPLY.chronomancer` (no passive modifiers — ability is UI-triggered)
+- `src/rules/unlocks.lua` — chronomancer unlock condition: Heroic+ win with `teleportsUsed == 0`
+- `src/ui/actions.lua` — `reorder_threat` button (teal, free action), visible when role matches and not yet used; tooltip added
+- `src/ui/modals.lua` — `Modals.newReorder(title, items, onPick)` variant with ↑/↓ per-item arrows, Confirm, and Cancel; `clickReorder` returns `"reorder"` (arrow hit), `modal.items` table (confirm), or `"cancel"`
+- `main.lua` — `reorder_threat` handler: peeks top 6 threat cards, opens reorder modal, on confirm calls `Actions.tryReorderThreats`; modal click handler passes through `"reorder"` to keep modal open
+- `tests/roles.spec.lua` — 5 Chronomancer tests: reorders deck correctly, sets flag, second use fails, works on short deck, applyRole registers no modifiers
+- `tests/unlocks.spec.lua` — 3 chronomancer unlock tests; "legendary win" assertion updated to `>= 6`
+- 270 total passing
 
 ### Phase 15 — Map and hand UX cleanup ✓ Done
 

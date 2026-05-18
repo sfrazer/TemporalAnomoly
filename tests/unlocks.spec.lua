@@ -105,12 +105,37 @@ describe("Unlocks", function()
             assert.is_false(found)
         end)
 
-        it("legendary win unlocks multiple roles at once", function()
-            local gs = wonAt("legendary", {hadDeckUpgrades = false})
+        -- chronomancer (heroic+ with 0 teleports)
+        it("chronomancer: heroic win with 0 teleports unlocks it", function()
+            local gs = wonAt("heroic", {teleportsUsed = 0})
             local newly = Unlocks.evaluateUnlocks(gs, makeProfile())
-            -- Should include at least: temporal_isolationist, engineer, researcher,
-            -- failsafe_designer, temporal_analyst
-            assert.is_true(#newly >= 5)
+            local found = false
+            for _, id in ipairs(newly) do if id == "chronomancer" then found = true end end
+            assert.is_true(found)
+        end)
+
+        it("chronomancer: heroic win with teleports used does NOT unlock it", function()
+            local gs = wonAt("heroic", {teleportsUsed = 3})
+            local newly = Unlocks.evaluateUnlocks(gs, makeProfile())
+            local found = false
+            for _, id in ipairs(newly) do if id == "chronomancer" then found = true end end
+            assert.is_false(found)
+        end)
+
+        it("chronomancer: standard win does NOT unlock it even with 0 teleports", function()
+            local gs = wonAt("standard", {teleportsUsed = 0})
+            local newly = Unlocks.evaluateUnlocks(gs, makeProfile())
+            local found = false
+            for _, id in ipairs(newly) do if id == "chronomancer" then found = true end end
+            assert.is_false(found)
+        end)
+
+        it("legendary win unlocks multiple roles at once", function()
+            local gs = wonAt("legendary", {hadDeckUpgrades = false, teleportsUsed = 0})
+            local newly = Unlocks.evaluateUnlocks(gs, makeProfile())
+            -- temporal_isolationist, engineer, researcher, failsafe_designer,
+            -- temporal_analyst, chronomancer
+            assert.is_true(#newly >= 6)
         end)
     end)
 
