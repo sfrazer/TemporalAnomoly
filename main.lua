@@ -65,6 +65,8 @@ local namingState       -- {slot=n, text=""} or nil
 
 -- Options confirm overlay: "quit_run"|"exit_game" or nil
 local optionsConfirm
+-- Phase to restore when options "Back" is clicked (nil → go to mainmenu)
+local optionsPrevPhase
 
 -- Instability animation state (drained one step per instabilityDelay seconds)
 local instabilitySteps = {}
@@ -273,12 +275,29 @@ local function commitShop()
 end
 
 local function enterMainMenu()
-    phase         = "mainmenu"
-    modal         = nil
-    activeBtn     = nil
-    message       = nil
-    gameResult    = nil
-    optionsConfirm = nil
+    phase           = "mainmenu"
+    modal           = nil
+    activeBtn       = nil
+    message         = nil
+    gameResult      = nil
+    optionsConfirm  = nil
+    optionsPrevPhase = nil
+end
+
+local function enterOptions(fromPhase)
+    optionsPrevPhase = fromPhase
+    optionsConfirm   = nil
+    phase            = "options"
+end
+
+local function leaveOptions()
+    if optionsPrevPhase and optionsPrevPhase ~= "mainmenu" then
+        phase            = optionsPrevPhase
+        optionsPrevPhase = nil
+        optionsConfirm   = nil
+    else
+        enterMainMenu()
+    end
 end
 
 local function confirmProfileName()
@@ -1041,7 +1060,19 @@ function love.draw()
     -- Actions remaining indicator
     if phase == "action" then
         love.graphics.setColor(0.5, 0.6, 0.8, 0.7)
-        love.graphics.printf("Actions: " .. tostring(gs.actionsRemaining), 0, LAYOUT.actY - 20, VIRTUAL_W, "right")
+        love.graphics.printf("Actions: " .. tostring(gs.actionsRemaining), 0, LAYOUT.actY - 20, VIRTUAL_W - 48, "right")
+    end
+
+    -- Options button (visible during active game phases)
+    if phase == "action" or phase == "gameover" then
+        love.graphics.setColor(0.16, 0.18, 0.24, 0.85)
+        love.graphics.rectangle("fill", 1242, 4, 34, 26, 4)
+        love.graphics.setColor(0.40, 0.44, 0.56)
+        love.graphics.setLineWidth(1)
+        love.graphics.rectangle("line", 1242, 4, 34, 26, 4)
+        love.graphics.setColor(0.72, 0.76, 0.88)
+        local font = love.graphics.getFont()
+        love.graphics.printf("=", 1242, 4 + (26 - font:getHeight()) / 2, 34, "center")
     end
 
     Anim.render()
@@ -1111,8 +1142,7 @@ function love.mousepressed(sx, sy, button)
             elseif action == "change_profile" then
                 enterProfileSelect()
             elseif action == "options" then
-                phase = "options"
-                optionsConfirm = nil
+                enterOptions("mainmenu")
             end
         end
         return
@@ -1122,7 +1152,7 @@ function love.mousepressed(sx, sy, button)
     if phase == "options" then
         if button == 1 then
             local profile = AutoSave.getProfile()
-            local inRun   = profile and profile.activeRun ~= nil
+            local inRun   = gs ~= nil or (profile and profile.activeRun ~= nil)
             -- Confirm overlay intercepts clicks
             if optionsConfirm then
                 local bw, bh = 440, 140
@@ -1133,15 +1163,16 @@ function love.mousepressed(sx, sy, button)
                    vy >= btnY2 and vy <= btnY2 + btnH then
                     -- Yes
                     if optionsConfirm == "quit_run" then
+                        gs = nil
                         local slot = AutoSave.getSlot()
                         profile.activeRun = nil
                         Save.saveProfile(slot, profile)
                         AutoSave.init(slot, profile)
                         optionsConfirm = nil
+                        enterMainMenu()
                     elseif optionsConfirm == "exit_game" then
                         love.event.quit()
                     end
-                    enterMainMenu()
                 elseif vx >= bx + bw/2 + 10 and vx <= bx + bw/2 + btnW + 10 and
                        vy >= btnY2 and vy <= btnY2 + btnH then
                     -- No
@@ -1151,7 +1182,7 @@ function love.mousepressed(sx, sy, button)
             end
             local action = Options.hit(vx, vy, profile, inRun)
             if action == "back" then
-                enterMainMenu()
+                leaveOptions()
             elseif action == "exit_game" then
                 optionsConfirm = "exit_game"
             elseif action == "quit_run" then
@@ -1243,6 +1274,14 @@ function love.mousepressed(sx, sy, button)
         return
     end
 
+    -- Options button (top-right corner, visible during action/gameover)
+    if button == 1 and (phase == "action" or phase == "gameover") then
+        if vx >= 1242 and vx <= 1276 and vy >= 4 and vy <= 30 then
+            enterOptions(phase)
+            return
+        end
+    end
+
     -- Modal absorbs all clicks
     if modal then
         local value = Modals.click(modal, vx, vy)
@@ -1330,13 +1369,12 @@ function love.keypressed(key)
             if optionsConfirm then
                 optionsConfirm = nil
             else
-                enterMainMenu()
+                leaveOptions()
             end
-        elseif phase == "mainmenu" then
-            -- stay on mainmenu; escape does nothing here
-        else
-            love.event.quit()
+        elseif phase == "action" or phase == "gameover" then
+            enterOptions(phase)
         end
+        -- mainmenu, profileselect, setup, difficulty, shop: no escape action
     end
     if key == "r" and phase == "gameover" then
         phase = "setup"
