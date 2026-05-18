@@ -16,6 +16,36 @@ local COLOR_ACCENT = {
     red    = {0.90, 0.20, 0.20},
 }
 
+-- Build role lookup at module load time
+local ROLE_BY_ID = {}
+do
+    local ok, roles = pcall(require, "data.roles")
+    if ok then
+        for _, r in ipairs(roles) do ROLE_BY_ID[r.id] = r end
+    end
+end
+
+-- Chip layout constants
+local CHIP_H     = 20
+local CHIP_PAD_X = 7
+local CHIP_GAP   = 5
+
+-- Renders a single chip (right edge at rx), returns new rx.
+local function renderChip(font, rx, chipY, label, r, g, b, tip)
+    local tw = font:getWidth(label)
+    local cw = tw + CHIP_PAD_X * 2
+    local cx = rx - cw
+    love.graphics.setColor(r, g, b, 0.18)
+    love.graphics.rectangle("fill", cx, chipY, cw, CHIP_H, 3)
+    love.graphics.setColor(r, g, b, 0.55)
+    love.graphics.setLineWidth(1)
+    love.graphics.rectangle("line", cx, chipY, cw, CHIP_H, 3)
+    love.graphics.setColor(r, g, b, 0.90)
+    love.graphics.print(label, cx + CHIP_PAD_X, chipY + (CHIP_H - font:getHeight()) / 2)
+    if tip then Tooltip.push(cx, chipY, cw, CHIP_H, tip) end
+    return cx - CHIP_GAP
+end
+
 function M.render(state, footerY, footerH)
     -- Background
     love.graphics.setColor(0.06, 0.07, 0.09)
@@ -24,11 +54,10 @@ function M.render(state, footerY, footerH)
     love.graphics.setLineWidth(1)
     love.graphics.line(0, footerY, 1280, footerY)
 
-    local x  = 16
-    local y  = footerY + (footerH - love.graphics.getFont():getHeight()) / 2
-    local sp = 10
-
     local font = love.graphics.getFont()
+    local x    = 16
+    local y    = footerY + (footerH - font:getHeight()) / 2
+    local sp   = 10
     local sx   -- tooltip start-x for each stat group
 
     -- Deck count
@@ -55,7 +84,6 @@ function M.render(state, footerY, footerH)
         local warn   = supply <= 4
         local csx    = x
         local midY   = y + font:getHeight() / 2
-        -- Shape icon + label (K for blacK to avoid B collision with Blue)
         love.graphics.setColor(unpack(COLOR_ACCENT[color]))
         Shapes.draw(color, x + 5, midY, 8)
         x = x + 10 + 2
@@ -108,7 +136,7 @@ function M.render(state, footerY, footerH)
     Tooltip.push(sx, footerY, x - sx, footerH,
         "Temporal Explosions this run.\n8 explosions is an immediate loss.\nTurns red at 6.")
 
-    -- Resolved anomalies
+    -- Resolved / Repaired anomaly status
     sx = x
     love.graphics.setColor(unpack(LABEL_COLOR))
     love.graphics.print("Resolved:", x, y)
@@ -116,25 +144,68 @@ function M.render(state, footerY, footerH)
     for _, color in ipairs({"blue","yellow","black","red"}) do
         local ac = COLOR_ACCENT[color]
         if state.repaired[color] then
+            -- Thick X for REPAIRED (0 cubes remain everywhere)
             love.graphics.setColor(ac[1], ac[2], ac[3])
-            love.graphics.print("★", x, y)
+            love.graphics.setLineWidth(2.5)
+            local cx2 = x + 7
+            local cy2 = y + font:getHeight() / 2
+            local r   = 5
+            love.graphics.line(cx2 - r, cy2 - r, cx2 + r, cy2 + r)
+            love.graphics.line(cx2 + r, cy2 - r, cx2 - r, cy2 + r)
+            x = x + 18
         elseif state.resolved[color] then
             love.graphics.setColor(ac[1], ac[2], ac[3], 0.7)
             love.graphics.print("◆", x, y)
+            x = x + 18
         else
             love.graphics.setColor(0.3, 0.3, 0.35)
             love.graphics.print("◇", x, y)
+            x = x + 18
         end
-        x = x + 18
     end
     Tooltip.push(sx, footerY, x - sx, footerH,
-        "Anomaly status per color.\n◇ = Active   ◆ = Resolved   ★ = Repaired\nRepaired means 0 cubes remain — future threat cards of that color have no effect.")
+        "Anomaly status per color.\n◇ = Active   ◆ = Resolved   X = Repaired\nRepaired means 0 cubes remain — future threat cards of that color have no effect.")
 
-    -- Location
-    love.graphics.setColor(unpack(LABEL_COLOR))
-    local loc = "  |  " .. state.currentCity:gsub("_", " "):gsub("(%a)([%a]*)", function(a,b) return a:upper()..b end)
-               .. " / " .. (state.currentPeriod:gsub("_", " "))
-    love.graphics.print(loc, x, y)
+    -- -----------------------------------------------------------------------
+    -- Right-aligned chips: role + active effects
+    -- -----------------------------------------------------------------------
+    local chipY = footerY + (footerH - CHIP_H) / 2
+    local rx    = 1272
+
+    -- Role chip (rightmost)
+    if state.role then
+        local rd = ROLE_BY_ID[state.role]
+        if rd then
+            rx = renderChip(font, rx, chipY,
+                rd.name,
+                rd.color[1], rd.color[2], rd.color[3],
+                rd.description)
+        end
+    end
+
+    -- Active-effect chips (left of role chip)
+    if state.role == "coordinator" and not state.coordinatorMoveUsed then
+        rx = renderChip(font, rx, chipY, "Coord. Move",
+            0.65, 0.30, 0.90,
+            "Coordinator: free move to any Temporal Outpost city available this turn.")
+    end
+    if state.role == "failsafe_designer" and not state.failsafeDesignerUsed then
+        rx = renderChip(font, rx, chipY, "Retrieve",
+            0.12, 0.60, 0.62,
+            "Failsafe Designer: can retrieve 1 event card from discard this run.")
+    end
+    if state.sealedCity then
+        local cityName = state.sealedCity:gsub("_", " ")
+                            :gsub("(%a)([%a]*)", function(a, b) return a:upper() .. b end)
+        rx = renderChip(font, rx, chipY, "Sealed: " .. cityName,
+            0.55, 0.25, 0.80,
+            cityName .. " is sealed — no cube placements until next Instability Phase.")
+    end
+    if state.skipNextInstability then
+        rx = renderChip(font, rx, chipY, "Barrier",    -- luacheck: ignore (rx unused after last chip)
+            0.20, 0.70, 0.65,
+            "Paradox Barrier active — next Instability Phase will be skipped.")
+    end
 end
 
 return M

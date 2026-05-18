@@ -7,7 +7,7 @@ local periods   = require("data.periods")
 
 local M = {}
 
-local function applyChallengeModEffect(state, card)
+function M.applyChallengeModEffect(state, card)
     if card.id == "hotspot" then
         local valid = {}
         for _, c in ipairs(cities) do
@@ -42,6 +42,29 @@ local function applyChallengeModEffect(state, card)
     end
 end
 
+-- Draws N threat cards from the deck into threatDiscard and returns them as
+-- step descriptors {card, stepType} without placing any cubes.
+-- Caller executes each step one at a time for the instability animation.
+function M.buildInstabilitySteps(state)
+    if state.skipNextInstability then
+        state.skipNextInstability = false
+        return {}
+    end
+    local n     = util.instabilityLevel(state)
+    local steps = {}
+    for _ = 1, n do
+        local card = util.drawTop(state.threatDeck)
+        if card then
+            state.threatDiscard[#state.threatDiscard + 1] = card
+            steps[#steps + 1] = {
+                card     = card,
+                stepType = card.type == "challengemod" and "challengemod" or "threat",
+            }
+        end
+    end
+    return steps
+end
+
 function M.runDrawPhase(state)
     local n = Mod.cardsDrawnPerTurn(state)
     for _ = 1, n do
@@ -72,7 +95,7 @@ function M.runInstabilityPhase(state)
         if card then
             state.threatDiscard[#state.threatDiscard + 1] = card
             if card.type == "challengemod" then
-                applyChallengeModEffect(state, card)
+                M.applyChallengeModEffect(state, card)
             else
                 Mod.onThreatCardDraw(state, {card = card})
                 if not state.repaired[card.color] then

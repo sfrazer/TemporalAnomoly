@@ -53,6 +53,18 @@ function M.fluxPulse()
     }
 end
 
+-- Threat-card reveal strip: shows drawn card name + period color during instability animation.
+-- Replaces any existing threat_reveal so only the current card is shown.
+function M.threatReveal(label, color)
+    for i = #_anims, 1, -1 do
+        if _anims[i].type == "threat_reveal" then table.remove(_anims, i) end
+    end
+    _anims[#_anims + 1] = {
+        type = "threat_reveal", label = label, color = color,
+        t = 0, duration = 1.80,
+    }
+end
+
 -- Centered phase name banner. delay (seconds) lets back-to-back banners
 -- play sequentially even when queued in the same frame.
 -- Caps at 2 queued banners to prevent runaway stacking.
@@ -130,6 +142,30 @@ function M.render()
             love.graphics.rectangle("fill", 0,      VH - ew, VW, ew)
             love.graphics.rectangle("fill", 0,      0,       ew, VH)
             love.graphics.rectangle("fill", VW - ew, 0,      ew, VH)
+
+        elseif a.type == "threat_reveal" then
+            local STRIP_Y = 458
+            local STRIP_H = 46
+            local cc = a.color and (CUBE_COLOR[a.color] or {0.55, 0.25, 0.80}) or {0.55, 0.25, 0.80}
+            local alpha
+            if a.t < 0.20 then
+                alpha = a.t / 0.20
+            elseif a.t > a.duration - 0.30 then
+                alpha = (a.duration - a.t) / 0.30
+            else
+                alpha = 1.0
+            end
+            alpha = math.max(0, math.min(1, alpha))
+            love.graphics.setColor(cc[1] * 0.25, cc[2] * 0.25, cc[3] * 0.25, alpha * 0.94)
+            love.graphics.rectangle("fill", 0, STRIP_Y, VW, STRIP_H)
+            love.graphics.setColor(cc[1], cc[2], cc[3], alpha * 0.60)
+            love.graphics.setLineWidth(1)
+            love.graphics.line(0, STRIP_Y,            VW, STRIP_Y)
+            love.graphics.line(0, STRIP_Y + STRIP_H,  VW, STRIP_Y + STRIP_H)
+            love.graphics.setColor(0.88, 0.92, 1.0, alpha * 0.55)
+            love.graphics.printf("Threat:", 0, STRIP_Y + 8, VW, "center")
+            love.graphics.setColor(1, 1, 1, alpha)
+            love.graphics.printf(a.label, 0, STRIP_Y + 22, VW, "center")
 
         elseif a.type == "phase_banner" then
             local alpha

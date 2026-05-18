@@ -56,6 +56,13 @@ local selectedDifficulty -- difficulty id chosen before shop, held until commitS
 local shopState         -- pending shop selections {bonusSelections, deckSelections, challengeModIds}
 local initAnims         -- forward declaration; defined below action handlers
 local handleCardPlay    -- forward declaration; defined alongside initAnims
+local finishInstability -- forward declaration; called by update drain loop
+
+-- Instability animation state (drained one step per instabilityDelay seconds)
+local instabilitySteps = {}
+local instabilityIdx   = 1
+local instabilityTimer = 0
+local instabilityDelay = 2.0
 
 -- ---------------------------------------------------------------------------
 -- Helpers
@@ -101,6 +108,39 @@ local function endAction()
     end
 end
 
+local function titleCase(s)
+    return s:gsub("_", " "):gsub("(%a)([%a]*)", function(a, b) return a:upper() .. b end)
+end
+
+local function executeInstabilityStep(step)
+    if gs.lost then return end
+    local card = step.card
+    if step.stepType == "challengemod" then
+        Phases.applyChallengeModEffect(gs, card)
+        Anim.threatReveal("Challenge Mod: " .. (card.name or card.id), nil)
+    else
+        Mod.onThreatCardDraw(gs, {card = card})
+        if not gs.repaired[card.color] then
+            local cubes = Mod.cubesPerThreatCard(gs)
+            Explosion.placeCubesAt(gs, card.city, card.period, card.color, cubes)
+        end
+        Anim.threatReveal(titleCase(card.city) .. " / " .. titleCase(card.period), card.color)
+    end
+end
+
+finishInstability = function()
+    gs.sealedCity = nil
+    if gs.lost then endAction(); return end
+    phase = "action"
+    gs.actionsRemaining    = Mod.actionsPerTurn(gs)
+    gs.coordinatorMoveUsed = false
+    if (gs.teleportBannedTurns or 0) > 0 then
+        gs.teleportBannedTurns = gs.teleportBannedTurns - 1
+    end
+    gs.turn = gs.turn + 1
+    endAction()
+end
+
 local function advancePhase()
     if phase == "action" then
         Anim.phaseBanner("Draw Phase", 0)
@@ -108,19 +148,30 @@ local function advancePhase()
         Phases.runDrawPhase(gs)
         if gs.lost then endAction(); return end
         Anim.phaseBanner("Instability Phase", 0.70)
-        phase = "instability"
-        Phases.runInstabilityPhase(gs)
-        gs.sealedCity = nil
-        if gs.lost then endAction(); return end
-        phase = "action"
-        gs.actionsRemaining    = Mod.actionsPerTurn(gs)
-        gs.coordinatorMoveUsed = false
-        if (gs.teleportBannedTurns or 0) > 0 then
-            gs.teleportBannedTurns = gs.teleportBannedTurns - 1
+
+        local profile = AutoSave.getProfile()
+        instabilityDelay = (profile and profile.instabilityStepDelay) or 2.0
+        local steps = Phases.buildInstabilitySteps(gs)
+
+        if #steps == 0 then
+            -- Skipped (Paradox Barrier) or empty deck edge case
+            finishInstability()
+            return
         end
-        gs.turn = gs.turn + 1
+
+        -- Enter async drain: cubes placed one card at a time with instabilityDelay gaps.
+        phase            = "instability_anim"
+        instabilitySteps = steps
+        instabilityIdx   = 1
+        instabilityTimer = 0
+        -- Clear UI immediately; save deferred until finishInstability()
+        activeBtn    = nil
+        selectedCard = nil
+        modal        = nil
+        -- Execute first card right away so the player sees something immediately
+        executeInstabilityStep(steps[1])
+        instabilityIdx = 2
     end
-    endAction()
 end
 
 local function enterProfileSelect()
@@ -306,6 +357,11 @@ local function handleButtonClick(id)
     end
 
     if id == "resolve" then
+        if not gs.outposts[gs.currentCity] then
+            showMsg("Must be at a Temporal Outpost to Resolve")
+            activeBtn = nil
+            return
+        end
         local threshold = Mod.cardsToResolveAnomaly(gs)
         local colorCounts = {}
         for _, c in ipairs(gs.hand) do
@@ -763,6 +819,24 @@ function love.update(dt)
     end
     Anim.update(dt)
     Console.update(dt)
+
+    if phase == "instability_anim" then
+        -- Finish immediately on loss so gameover shows without waiting
+        if gs and gs.lost then
+            finishInstability()
+            return
+        end
+        instabilityTimer = instabilityTimer + dt
+        if instabilityTimer >= instabilityDelay then
+            instabilityTimer = instabilityTimer - instabilityDelay
+            if instabilityIdx <= #instabilitySteps then
+                executeInstabilityStep(instabilitySteps[instabilityIdx])
+                instabilityIdx = instabilityIdx + 1
+            else
+                finishInstability()
+            end
+        end
+    end
 end
 
 function love.draw()
