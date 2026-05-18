@@ -1,5 +1,13 @@
 ## Future Ideas
 
+Card UI: Sort target is too small and hard to see
+
+If resolving an anomaly and we have more cards in hand than we need, specify which cards to discard
+
+Difficulty cards like temporal_ban should be removed after they take effect so they aren't re-shuffled onto the deck
+
+Tooltip for a city should include if the player can move there and what types of movement are available
+
 
 ### Active / Next
 

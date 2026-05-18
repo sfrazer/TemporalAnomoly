@@ -26,6 +26,8 @@ local ProfileSelect    = require("src.ui.profileSelect")
 local MetaShop         = require("src.ui.metaShop")
 local DifficultySelect = require("src.ui.difficultySelect")
 local GameOver         = require("src.ui.gameOver")
+local MainMenu         = require("src.ui.mainMenu")
+local Options          = require("src.ui.options")
 
 -- ---------------------------------------------------------------------------
 -- Layout (virtual 1280×720)
@@ -48,7 +50,7 @@ local modal             -- active Modals.new() table, or nil
 local activeBtn         -- currently highlighted action button id
 local selectedCard      -- index into gs.hand, or nil
 local message           -- {text, ttl} for brief feedback messages
-local phase             -- "profileselect"|"setup"|"difficulty"|"shop"|"action"|"gameover"
+local phase             -- "profileselect"|"mainmenu"|"options"|"setup"|"difficulty"|"shop"|"action"|"gameover"|"instability_anim"
 local gameResult        -- {result, reason, earnedRP, newUnlocks}
 local profilesCache     -- [slot] = profile_table_or_nil, used by profileselect
 local selectedRole      -- role id chosen on role-select screen, held until shop commits
@@ -57,6 +59,12 @@ local shopState         -- pending shop selections {bonusSelections, deckSelecti
 local initAnims         -- forward declaration; defined below action handlers
 local handleCardPlay    -- forward declaration; defined alongside initAnims
 local finishInstability -- forward declaration; called by update drain loop
+
+-- Profile naming overlay (shown when creating a new profile on profileselect screen)
+local namingState       -- {slot=n, text=""} or nil
+
+-- Options confirm overlay: "quit_run"|"exit_game" or nil
+local optionsConfirm
 
 -- Instability animation state (drained one step per instabilityDelay seconds)
 local instabilitySteps = {}
@@ -179,12 +187,14 @@ local function enterProfileSelect()
     for slot = 1, Save.SLOT_COUNT do
         profilesCache[slot] = Save.loadProfile(slot)
     end
-    phase      = "profileselect"
-    gs         = nil
-    modal      = nil
-    activeBtn  = nil
-    message    = nil
-    gameResult = nil
+    phase         = "profileselect"
+    gs            = nil
+    modal         = nil
+    activeBtn     = nil
+    message       = nil
+    gameResult    = nil
+    namingState   = nil
+    optionsConfirm = nil
 end
 
 local function resumeGame(runData, slot, profile)
@@ -262,18 +272,40 @@ local function commitShop()
     startGame(selectedRole)
 end
 
+local function enterMainMenu()
+    phase         = "mainmenu"
+    modal         = nil
+    activeBtn     = nil
+    message       = nil
+    gameResult    = nil
+    optionsConfirm = nil
+end
+
+local function confirmProfileName()
+    local slot = namingState.slot
+    local name = namingState.text
+    namingState  = nil
+    local profile = Save.newProfile()
+    profile.name  = name
+    Save.saveProfile(slot, profile)
+    Save.saveIndex({lastUsed = slot})
+    profilesCache[slot] = profile
+    AutoSave.init(slot, profile)
+    enterMainMenu()
+end
+
 local function selectProfile(slot)
     local profile = profilesCache[slot]
     if not profile then
-        profile = Save.newProfile()
-        Save.saveProfile(slot, profile)
-        profilesCache[slot] = profile
+        namingState = {slot = slot, text = ""}
+        return
     end
+    Save.saveIndex({lastUsed = slot})
+    AutoSave.init(slot, profile)
     if profile.activeRun then
         resumeGame(profile.activeRun, slot, profile)
     else
-        AutoSave.init(slot, profile)
-        phase = "setup"
+        enterMainMenu()
     end
 end
 
@@ -821,12 +853,16 @@ function love.load()
     Map.setMapHeight(LAYOUT.mapH)
     initConsole()
 
-    -- Try to resume the last session automatically
     local index = Save.loadIndex()
     if index.lastUsed then
         local profile = Save.loadProfile(index.lastUsed)
-        if profile and profile.activeRun then
-            resumeGame(profile.activeRun, index.lastUsed, profile)
+        if profile then
+            if profile.activeRun then
+                resumeGame(profile.activeRun, index.lastUsed, profile)
+            else
+                AutoSave.init(index.lastUsed, profile)
+                enterMainMenu()
+            end
             return
         end
     end
@@ -880,6 +916,84 @@ function love.draw()
 
     if phase == "profileselect" then
         ProfileSelect.render(profilesCache or {})
+        -- Naming overlay
+        if namingState then
+            love.graphics.setColor(0, 0, 0, 0.65)
+            love.graphics.rectangle("fill", 0, 0, 1280, 720)
+            local bw, bh = 480, 180
+            local bx, by = (1280 - bw) / 2, (720 - bh) / 2
+            love.graphics.setColor(0.10, 0.12, 0.16)
+            love.graphics.rectangle("fill", bx, by, bw, bh, 8)
+            love.graphics.setColor(0.35, 0.40, 0.52)
+            love.graphics.setLineWidth(1.5)
+            love.graphics.rectangle("line", bx, by, bw, bh, 8)
+            love.graphics.setColor(0.80, 0.83, 0.95)
+            love.graphics.printf("Name your profile:", bx, by + 22, bw, "center")
+            -- Text field
+            local tfx, tfy, tfw, tfh = bx + 32, by + 60, bw - 64, 40
+            love.graphics.setColor(0.06, 0.07, 0.10)
+            love.graphics.rectangle("fill", tfx, tfy, tfw, tfh, 4)
+            love.graphics.setColor(0.45, 0.50, 0.65)
+            love.graphics.setLineWidth(1)
+            love.graphics.rectangle("line", tfx, tfy, tfw, tfh, 4)
+            local cursor = (math.floor(love.timer.getTime() * 2) % 2 == 0) and "|" or ""
+            love.graphics.setColor(0.90, 0.92, 0.98)
+            local font = love.graphics.getFont()
+            love.graphics.print(namingState.text .. cursor, tfx + 10, tfy + (tfh - font:getHeight()) / 2)
+            -- Buttons
+            local btnW, btnH = 100, 36
+            -- Create
+            love.graphics.setColor(0.18, 0.42, 0.20)
+            love.graphics.rectangle("fill", bx + bw/2 - btnW - 10, by + bh - btnH - 18, btnW, btnH, 4)
+            love.graphics.setColor(0.9, 0.9, 0.9)
+            love.graphics.printf("Create", bx + bw/2 - btnW - 10, by + bh - btnH - 18 + (btnH - font:getHeight())/2, btnW, "center")
+            -- Cancel
+            love.graphics.setColor(0.40, 0.18, 0.18)
+            love.graphics.rectangle("fill", bx + bw/2 + 10, by + bh - btnH - 18, btnW, btnH, 4)
+            love.graphics.setColor(0.9, 0.9, 0.9)
+            love.graphics.printf("Cancel", bx + bw/2 + 10, by + bh - btnH - 18 + (btnH - font:getHeight())/2, btnW, "center")
+        end
+        love.graphics.pop()
+        return
+    end
+
+    if phase == "mainmenu" then
+        MainMenu.render(AutoSave.getProfile())
+        love.graphics.pop()
+        return
+    end
+
+    if phase == "options" then
+        local profile = AutoSave.getProfile()
+        local inRun   = profile and profile.activeRun ~= nil
+        Options.render(profile, inRun)
+        -- Confirm overlay
+        if optionsConfirm then
+            love.graphics.setColor(0, 0, 0, 0.65)
+            love.graphics.rectangle("fill", 0, 0, 1280, 720)
+            local bw, bh = 440, 140
+            local bx, by = (1280 - bw) / 2, (720 - bh) / 2
+            love.graphics.setColor(0.10, 0.12, 0.16)
+            love.graphics.rectangle("fill", bx, by, bw, bh, 8)
+            love.graphics.setColor(0.42, 0.22, 0.22)
+            love.graphics.setLineWidth(1.5)
+            love.graphics.rectangle("line", bx, by, bw, bh, 8)
+            local msg = optionsConfirm == "quit_run" and "Abandon the active run?" or "Exit the game?"
+            love.graphics.setColor(0.88, 0.90, 0.95)
+            love.graphics.printf(msg, bx, by + 22, bw, "center")
+            local font = love.graphics.getFont()
+            local btnW, btnH = 100, 36
+            -- Yes
+            love.graphics.setColor(0.42, 0.18, 0.18)
+            love.graphics.rectangle("fill", bx + bw/2 - btnW - 10, by + bh - btnH - 18, btnW, btnH, 4)
+            love.graphics.setColor(0.9, 0.9, 0.9)
+            love.graphics.printf("Yes", bx + bw/2 - btnW - 10, by + bh - btnH - 18 + (btnH - font:getHeight())/2, btnW, "center")
+            -- No
+            love.graphics.setColor(0.18, 0.42, 0.20)
+            love.graphics.rectangle("fill", bx + bw/2 + 10, by + bh - btnH - 18, btnW, btnH, 4)
+            love.graphics.setColor(0.9, 0.9, 0.9)
+            love.graphics.printf("No", bx + bw/2 + 10, by + bh - btnH - 18 + (btnH - font:getHeight())/2, btnW, "center")
+        end
         love.graphics.pop()
         return
     end
@@ -943,6 +1057,12 @@ function love.draw()
 end
 
 function love.textinput(text)
+    if namingState then
+        if #namingState.text < 16 then
+            namingState.text = namingState.text .. text
+        end
+        return
+    end
     Console.textinput(text)
 end
 
@@ -952,6 +1072,24 @@ function love.mousepressed(sx, sy, button)
     -- Profile selection screen
     if phase == "profileselect" then
         if button == 1 then
+            -- Naming overlay intercepts all clicks
+            if namingState then
+                local bw, bh = 480, 180
+                local bx, by = (1280 - bw) / 2, (720 - bh) / 2
+                local btnW, btnH = 100, 36
+                local btnY2 = by + bh - btnH - 18
+                -- Create button
+                if vx >= bx + bw/2 - btnW - 10 and vx <= bx + bw/2 - 10 and
+                   vy >= btnY2 and vy <= btnY2 + btnH then
+                    confirmProfileName()
+                end
+                -- Cancel button
+                if vx >= bx + bw/2 + 10 and vx <= bx + bw/2 + btnW + 10 and
+                   vy >= btnY2 and vy <= btnY2 + btnH then
+                    namingState = nil
+                end
+                return
+            end
             local hit = ProfileSelect.hit(vx, vy)
             if hit then
                 if hit.action == "delete" and profilesCache[hit.slot] then
@@ -960,6 +1098,78 @@ function love.mousepressed(sx, sy, button)
                 elseif hit.action == "select" then
                     selectProfile(hit.slot)
                 end
+            end
+        end
+        return
+    end
+
+    -- Main menu screen
+    if phase == "mainmenu" then
+        if button == 1 then
+            local profile = AutoSave.getProfile()
+            local action  = MainMenu.hit(vx, vy, profile)
+            if action == "resume" then
+                resumeGame(profile.activeRun, AutoSave.getSlot(), profile)
+            elseif action == "new_run" then
+                phase = "setup"
+            elseif action == "change_profile" then
+                enterProfileSelect()
+            elseif action == "options" then
+                phase = "options"
+                optionsConfirm = nil
+            end
+        end
+        return
+    end
+
+    -- Options screen
+    if phase == "options" then
+        if button == 1 then
+            local profile = AutoSave.getProfile()
+            local inRun   = profile and profile.activeRun ~= nil
+            -- Confirm overlay intercepts clicks
+            if optionsConfirm then
+                local bw, bh = 440, 140
+                local bx, by = (1280 - bw) / 2, (720 - bh) / 2
+                local btnW, btnH = 100, 36
+                local btnY2 = by + bh - btnH - 18
+                if vx >= bx + bw/2 - btnW - 10 and vx <= bx + bw/2 - 10 and
+                   vy >= btnY2 and vy <= btnY2 + btnH then
+                    -- Yes
+                    if optionsConfirm == "quit_run" then
+                        local slot = AutoSave.getSlot()
+                        profile.activeRun = nil
+                        Save.saveProfile(slot, profile)
+                        AutoSave.init(slot, profile)
+                        optionsConfirm = nil
+                    elseif optionsConfirm == "exit_game" then
+                        love.event.quit()
+                    end
+                    enterMainMenu()
+                elseif vx >= bx + bw/2 + 10 and vx <= bx + bw/2 + btnW + 10 and
+                       vy >= btnY2 and vy <= btnY2 + btnH then
+                    -- No
+                    optionsConfirm = nil
+                end
+                return
+            end
+            local action = Options.hit(vx, vy, profile, inRun)
+            if action == "back" then
+                enterMainMenu()
+            elseif action == "exit_game" then
+                optionsConfirm = "exit_game"
+            elseif action == "quit_run" then
+                optionsConfirm = "quit_run"
+            elseif action == "delay_dec" then
+                profile.instabilityStepDelay = math.max(0.5, (profile.instabilityStepDelay or 5.0) - 0.5)
+                Save.saveProfile(AutoSave.getSlot(), profile)
+            elseif action == "delay_inc" then
+                profile.instabilityStepDelay = math.min(10.0, (profile.instabilityStepDelay or 5.0) + 0.5)
+                Save.saveProfile(AutoSave.getSlot(), profile)
+            elseif action == "fullscreen_toggle" then
+                profile.fullscreen = not (profile.fullscreen or false)
+                Save.saveProfile(AutoSave.getSlot(), profile)
+                love.window.setFullscreen(profile.fullscreen)
             end
         end
         return
@@ -1107,7 +1317,31 @@ function love.keypressed(key)
         return
     end
 
-    if key == "escape" then love.event.quit() end
+    -- Profile naming overlay
+    if namingState then
+        if key == "backspace" then
+            namingState.text = namingState.text:sub(1, -2)
+        elseif key == "return" or key == "kpenter" then
+            confirmProfileName()
+        elseif key == "escape" then
+            namingState = nil
+        end
+        return
+    end
+
+    if key == "escape" then
+        if phase == "options" then
+            if optionsConfirm then
+                optionsConfirm = nil
+            else
+                enterMainMenu()
+            end
+        elseif phase == "mainmenu" then
+            -- stay on mainmenu; escape does nothing here
+        else
+            love.event.quit()
+        end
+    end
     if key == "r" and phase == "gameover" then
         phase = "setup"
     end
