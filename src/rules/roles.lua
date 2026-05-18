@@ -81,6 +81,10 @@ APPLY.temporal_analyst = function(state)
     -- Ability is UI-triggered (Peek Threat button); no passive modifiers
 end
 
+APPLY.chronomancer = function(state)
+    -- Ability is UI-triggered (Reorder Threat button); no passive modifiers
+end
+
 function M.applyRole(state, roleId)
     local fn = APPLY[roleId]
     if fn then fn(state) end

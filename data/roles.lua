@@ -60,4 +60,12 @@ return {
         unlocked    = false,
         unlockHint  = "Win with 0 event cards",
     },
+    {
+        id          = "chronomancer",
+        name        = "Chronomancer",
+        color       = {0.10, 0.72, 0.80},
+        description = "Once per run: view the top 6 threat cards and reorder them freely.",
+        unlocked    = false,
+        unlockHint  = "Win at Heroic without Teleporting",
+    },
 }

@@ -41,6 +41,8 @@ function H.makeState(overrides)
         skipNextInstability   = false,
         sealedCity            = nil,
         failsafeDesignerUsed  = false,
+        chronomancerUsed      = false,
+        teleportsUsed         = 0,
     }
     if overrides then
         for k, v in pairs(overrides) do state[k] = v end

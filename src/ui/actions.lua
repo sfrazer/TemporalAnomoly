@@ -10,6 +10,7 @@ local BUTTON_TIP = {
     coordinator_move = "Coordinator ability: move to any city with a Temporal Outpost for free (once per turn).",
     retrieve_card    = "Failsafe Designer: return 1 event card from your discard to hand (once per run, free).",
     peek_threat      = "Temporal Analyst: spend 1 action to see the top 2 cards of the threat deck.",
+    reorder_threat   = "Chronomancer: view the top 6 threat cards and reorder them freely (once per run, free).",
 }
 
 local BASE_BUTTONS = {
@@ -39,6 +40,9 @@ local function getButtons(gs)
     end
     if gs and gs.role == "temporal_analyst" then
         table.insert(btns, #btns, {id = "peek_threat", label = "Peek Threat"})
+    end
+    if gs and gs.role == "chronomancer" and not gs.chronomancerUsed then
+        table.insert(btns, #btns, {id = "reorder_threat", label = "Reorder Threat"})
     end
     return btns
 end
@@ -76,6 +80,8 @@ function M.render(actY, actH, activeId, gs)
             love.graphics.setColor(0.12, 0.42, 0.44)
         elseif btn.id == "peek_threat" then
             love.graphics.setColor(0.44, 0.34, 0.10)
+        elseif btn.id == "reorder_threat" then
+            love.graphics.setColor(0.08, 0.48, 0.56)
         else
             love.graphics.setColor(0.20, 0.24, 0.30)
         end

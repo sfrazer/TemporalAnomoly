@@ -1,4 +1,20 @@
-Future Ideas:
+## Future Ideas
+
+
+### Active / Next
+
+Order is not priority. Move each into the archive once complete.
+
+Open design threads:
+- *Mobile Outpost* card effect — currently a stub returning "Not yet implemented".
+- *Supply Drop* card effect — currently a stub returning "Not yet implemented".
+- *Chronomancer unlock condition* — TBD (see Phase 17).
+
+---
+
+### Archive
+
+Future Ideas (these are already incorperated in the plan)
 
 - bugfix: chronologist role is supposed to auto-clear REPAIRED-color cubes when moving to a new location
 

@@ -72,7 +72,7 @@ function M.newProfile()
         challengeModIds   = {},
         selectedDifficulty = "standard",
         handSortMode           = "insertion",
-        instabilityStepDelay   = 2.0,
+        instabilityStepDelay   = 5.0,
     }
 end
 

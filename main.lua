@@ -62,7 +62,7 @@ local finishInstability -- forward declaration; called by update drain loop
 local instabilitySteps = {}
 local instabilityIdx   = 1
 local instabilityTimer = 0
-local instabilityDelay = 2.0
+local instabilityDelay = 5.0
 
 -- ---------------------------------------------------------------------------
 -- Helpers
@@ -150,7 +150,7 @@ local function advancePhase()
         Anim.phaseBanner("Instability Phase", 0.70)
 
         local profile = AutoSave.getProfile()
-        instabilityDelay = (profile and profile.instabilityStepDelay) or 2.0
+        instabilityDelay = (profile and profile.instabilityStepDelay) or 5.0
         local steps = Phases.buildInstabilitySteps(gs)
 
         if #steps == 0 then
@@ -416,6 +416,28 @@ local function handleButtonClick(id)
             else
                 showMsg(err or "Cannot retrieve")
             end
+        end)
+        return
+    end
+
+    if id == "reorder_threat" then
+        local REORDER_MAX = 6
+        local n = math.min(REORDER_MAX, #gs.threatDeck)
+        if n == 0 then showMsg("Threat deck is empty"); activeBtn = nil; return end
+        local items = {}
+        for i = 1, n do
+            local card = gs.threatDeck[i]
+            local label = card.city
+                and (titleCase(card.city) .. " / " .. titleCase(card.period))
+                or  (card.name or card.id)
+            items[#items + 1] = {label = label, value = card}
+        end
+        modal = Modals.newReorder("Reorder Top " .. n .. " Threat Cards:", items, function(ordered)
+            local cards = {}
+            for _, item in ipairs(ordered) do cards[#cards + 1] = item.value end
+            local ok, err = Actions.tryReorderThreats(gs, cards)
+            if ok then showMsg("Threat deck reordered"); endAction()
+            else       showMsg(err or "Cannot reorder") end
         end)
         return
     end
@@ -1020,6 +1042,8 @@ function love.mousepressed(sx, sy, button)
         local value = Modals.click(modal, vx, vy)
         if value == "cancel" then
             modal = nil; activeBtn = nil
+        elseif value == "reorder" then
+            -- arrow hit: modal.items already mutated; keep modal open
         elseif value ~= nil then
             local cb = modal.onPick
             modal = nil

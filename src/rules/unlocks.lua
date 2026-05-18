@@ -18,6 +18,10 @@ local CONDITIONS = {
     temporal_analyst = function(gs)
         return not gs.hadDeckUpgrades
     end,
+    chronomancer = function(gs)
+        return (DIFFICULTY_TIER[gs.difficulty] or 0) >= 2
+            and (gs.teleportsUsed or 0) == 0
+    end,
 }
 
 -- Returns list of newly unlocked role IDs. Only call when the player won.

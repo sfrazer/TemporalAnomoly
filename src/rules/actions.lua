@@ -78,6 +78,7 @@ function M.tryTeleport(state, cardCity, cardPeriod)
     state.playerDiscard[#state.playerDiscard + 1] = removed[1]
     state.currentCity   = cardCity
     state.currentPeriod = cardPeriod
+    state.teleportsUsed = (state.teleportsUsed or 0) + 1
     Mod.onArrive(state, {city = state.currentCity, period = state.currentPeriod})
     return true
 end
@@ -97,6 +98,7 @@ function M.tryTeleportAlt(state, destCity, destPeriod)
     state.playerDiscard[#state.playerDiscard + 1] = removed[1]
     state.currentCity   = destCity
     state.currentPeriod = destPeriod
+    state.teleportsUsed = (state.teleportsUsed or 0) + 1
     Mod.onArrive(state, {city = state.currentCity, period = state.currentPeriod})
     return true
 end
@@ -282,6 +284,21 @@ function M.tryRetrieveCard(state, discardIdx)
     table.remove(state.playerDiscard, discardIdx)
     state.hand[#state.hand + 1] = card
     state.failsafeDesignerUsed = true
+    return true
+end
+
+-- Replaces the top N cards of the threat deck with orderedCards (index 1 = new top).
+-- orderedCards must be the same set of cards that were on top — main.lua ensures this.
+function M.tryReorderThreats(state, orderedCards)
+    if state.chronomancerUsed then
+        return false, "Chronomancer ability already used this run"
+    end
+    local n = #orderedCards
+    for _ = 1, n do table.remove(state.threatDeck, 1) end
+    for i = n, 1, -1 do
+        table.insert(state.threatDeck, 1, orderedCards[i])
+    end
+    state.chronomancerUsed = true
     return true
 end
 
