@@ -857,12 +857,8 @@ function love.load()
     if index.lastUsed then
         local profile = Save.loadProfile(index.lastUsed)
         if profile then
-            if profile.activeRun then
-                resumeGame(profile.activeRun, index.lastUsed, profile)
-            else
-                AutoSave.init(index.lastUsed, profile)
-                enterMainMenu()
-            end
+            AutoSave.init(index.lastUsed, profile)
+            enterMainMenu()
             return
         end
     end
